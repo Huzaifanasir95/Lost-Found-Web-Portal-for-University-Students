@@ -1,69 +1,80 @@
-# Welcome to your Lovable project
+Here's a sample README file for your project:
 
-## Project info
+---
 
-**URL**: https://lovable.dev/projects/bc54c5cc-c236-4283-892e-4ddfd11f9f65
+# Project Name
 
-## How can I edit this code?
+## Overview
 
-There are several ways of editing your application.
+This project consists of a backend service running on port 5000 and a frontend service running on port 8080. It enables seamless interaction between both services, allowing users to access the web application with the frontend communicating with the backend for dynamic data handling.
 
-**Use Lovable**
+## Getting Started
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/bc54c5cc-c236-4283-892e-4ddfd11f9f65) and start prompting.
+Follow the steps below to set up the project locally.
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js (v14 or later)
+- npm (Node Package Manager)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. **Clone the repository**
 
-Follow these steps:
+   Clone the repository to your local machine using the following command:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+   ```bash
+   git clone https://github.com/Huzaifanasir95/Lost-Found-Web-Portal-for-University-Students.git
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. **Backend Setup**
 
-# Step 3: Install the necessary dependencies.
-npm i
+   Navigate to the backend directory:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+   ```bash
+   cd backend
+   ```
 
-**Edit a file directly in GitHub**
+   Install the necessary dependencies:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+   ```bash
+   npm install
+   ```
 
-**Use GitHub Codespaces**
+   After that, start the backend service:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+   ```bash
+   npm run dev
+   ```
 
-## What technologies are used for this project?
+   The backend service will be available at `http://localhost:5000`.
 
-This project is built with .
+3. **Frontend Setup**
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+   Navigate to the frontend directory:
 
-## How can I deploy this project?
+   ```bash
+   cd ../frontend
+   ```
 
-Simply open [Lovable](https://lovable.dev/projects/bc54c5cc-c236-4283-892e-4ddfd11f9f65) and click on Share -> Publish.
+   Install the necessary dependencies:
 
-## I want to use a custom domain - is that possible?
+   ```bash
+   npm install
+   ```
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+   After that, start the frontend service:
+
+   ```bash
+   npm run dev
+   ```
+
+   The frontend service will be available at `http://localhost:8080`.
+
+### Usage
+
+Once both the backend and frontend services are running, you can visit the frontend at `http://localhost:8080` to interact with the application. The frontend will be connected to the backend running on `http://localhost:5000`.
+
+---
+
+Let me know if you'd like to add any specific instructions or details!
