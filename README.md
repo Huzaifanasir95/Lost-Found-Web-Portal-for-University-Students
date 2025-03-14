@@ -1,9 +1,7 @@
-Here's a sample README file for your project:
 
----
 
 # Project Name
-
+Lost-Found-Web-Portal-for-University-Students
 ## Overview
 
 This project consists of a backend service running on port 5000 and a frontend service running on port 8080. It enables seamless interaction between both services, allowing users to access the web application with the frontend communicating with the backend for dynamic data handling.
@@ -76,5 +74,3 @@ Follow the steps below to set up the project locally.
 Once both the backend and frontend services are running, you can visit the frontend at `http://localhost:8080` to interact with the application. The frontend will be connected to the backend running on `http://localhost:5000`.
 
 ---
-
-Let me know if you'd like to add any specific instructions or details!
