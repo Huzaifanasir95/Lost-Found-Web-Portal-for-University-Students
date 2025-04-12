@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const { check } = require('express-validator');
@@ -76,5 +75,21 @@ router.post(
 // @desc    Get all pending claims for admin
 // @access  Private (Admin only)
 router.get('/claims/pending', [auth, admin], itemsController.getPendingClaims);
+
+// @route   POST /api/items/:id/comments
+// @desc    Add a comment to an item
+// @access  Private
+router.post(
+  '/:id/comments',
+  [
+    auth,
+    [
+      check('text', 'Comment text cannot be empty').not().isEmpty().trim()
+    ]
+  ],
+  itemsController.addCommentToItem
+);
+
+// TODO: Add DELETE /api/items/:id/comments/:commentId route later if needed
 
 module.exports = router;

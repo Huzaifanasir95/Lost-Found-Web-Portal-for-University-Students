@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navigation from '@/components/Navigation';
@@ -34,6 +33,18 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import UserManagement from '@/components/admin/UserManagement';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog";
+import { getStatusIcon, getStatusText, getStatusColor, ItemStatus } from '@/utils/itemUtils';
 
 interface Claim {
   id: string;
@@ -68,6 +79,33 @@ interface StatsData {
   claimsResolved: number;
 }
 
+// Basic interface for claim summary within an item
+interface ClaimSummary {
+  _id: string;
+  status: string;
+  // Add other summary fields if needed (e.g., claimantId)
+}
+
+// Define Item interface based on Item model (adjust as needed)
+interface Item {
+  _id: string;
+  title: string;
+  type: 'lost' | 'found';
+  category: string;
+  description: string;
+  location: string;
+  date: string; // Date reported/found/lost
+  status: string; // Example: 'pending', 'claimed', 'resolved', 'rejected'
+  user: { // User who reported it
+    _id: string;
+    name: string;
+  };
+  // Add other relevant fields like imageURL if available
+  imageUrl?: string;
+  createdAt?: string;
+  claims?: ClaimSummary[]; // Use defined interface instead of any[]
+}
+
 const Admin = () => {
   const { isAuthenticated, isAdmin, token } = useAuth();
   const navigate = useNavigate();
@@ -85,8 +123,13 @@ const Admin = () => {
     claimsResolved: 0
   });
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pending-claims');
 
-  // If not authenticated or not an admin, redirect to login
+  const [allItems, setAllItems] = useState<Item[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [itemError, setItemError] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -103,94 +146,92 @@ const Admin = () => {
     }
   }, [isAuthenticated, isAdmin, navigate, toast]);
 
-  // Fetch admin data
   useEffect(() => {
-    const fetchAdminData = async () => {
+    const fetchCoreAdminData = async () => {
       if (!isAuthenticated || !isAdmin) return;
-
       setLoading(true);
-      
       try {
-        // Fetch claims
-        const claimsResponse = await fetch('http://localhost:5000/api/admin/claims', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (claimsResponse.ok) {
-          const claimsData = await claimsResponse.json();
-          setClaims(claimsData);
-        }
+        const [claimsRes, highValueRes, statsRes] = await Promise.all([
+          fetch('http://localhost:5000/api/items/claims/pending', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }),
+          fetch('http://localhost:5000/api/admin/high-value-items', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }),
+          fetch('http://localhost:5000/api/admin/stats', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } })
+        ]);
 
-        // Fetch high value items
-        const highValueResponse = await fetch('http://localhost:5000/api/admin/high-value-items', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (highValueResponse.ok) {
-          const highValueData = await highValueResponse.json();
-          setHighValueItems(highValueData);
-        }
-
-        // Fetch stats
-        const statsResponse = await fetch('http://localhost:5000/api/admin/stats', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setStatsData(statsData);
-        }
+        if (claimsRes.ok) setClaims(await claimsRes.json());
+        if (highValueRes.ok) setHighValueItems(await highValueRes.json());
+        if (statsRes.ok) setStatsData(await statsRes.json());
       } catch (error) {
-        console.error('Error fetching admin data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load admin data. Please try again later.",
-          variant: "destructive",
-        });
+        console.error('Error fetching core admin data:', error);
+        toast({ title: "Error", description: "Failed to load initial admin data.", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     };
+    fetchCoreAdminData();
+  }, [isAuthenticated, isAdmin, token, toast]);
 
-    fetchAdminData();
-  }, [isAuthenticated, isAdmin, toast, token]);
+  useEffect(() => {
+    const fetchAllItems = async () => {
+      if (activeTab === 'item-management' && isAuthenticated && isAdmin && token) {
+        setLoadingItems(true);
+        setItemError(null);
+        try {
+          const response = await fetch('http://localhost:5000/api/items', {
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json' 
+            }
+          });
+          if (!response.ok) {
+            throw new Error('Failed to fetch items');
+          }
+          const data: Item[] = await response.json();
+          setAllItems(data);
+        } catch (err) {
+          console.error("Error fetching items:", err);
+          setItemError(err instanceof Error ? err.message : 'Could not load items');
+        } finally {
+          setLoadingItems(false);
+        }
+      }
+    };
+    fetchAllItems();
+  }, [activeTab, isAuthenticated, isAdmin, token]);
 
   const handleViewItem = (itemId: string) => {
     navigate(`/items/${itemId}`);
   };
 
-  const handleProcessClaim = async (claimId: string, action: 'approve' | 'reject') => {
-    setProcessingClaimId(claimId);
+  const handleProcessClaim = async (itemId: string, action: 'resolved' | 'rejected') => {
+    setProcessingClaimId(itemId);
     
     try {
-      const response = await fetch(`http://localhost:5000/api/admin/claims/${claimId}/${action}`, {
+      const response = await fetch(`http://localhost:5000/api/items/${itemId}/review`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ status: action })
       });
       
       if (!response.ok) {
-        throw new Error(`Failed to ${action} claim`);
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${action} claim`);
       }
       
       toast({
-        title: action === 'approve' ? "Claim Approved" : "Claim Rejected",
-        description: `The claim has been ${action === 'approve' ? 'approved' : 'rejected'} successfully.`,
+        title: action === 'resolved' ? "Claim Approved" : "Claim Rejected",
+        description: `The claim associated with the item has been ${action} successfully.`,
       });
       
-      // Remove the claim from the list
-      setClaims(claims.filter(claim => claim.id !== claimId));
+      setClaims(prevClaims => prevClaims.filter(claim => claim.itemId !== itemId));
       
-      // Update stats
       setStatsData(prev => ({
         ...prev,
         claimsPending: prev.claimsPending - 1,
-        claimsResolved: action === 'approve' ? prev.claimsResolved + 1 : prev.claimsResolved
+        resolvedItems: action === 'resolved' ? prev.resolvedItems + 1 : prev.resolvedItems
       }));
       
     } catch (err) {
@@ -202,6 +243,40 @@ const Admin = () => {
       });
     } finally {
       setProcessingClaimId(null);
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    setDeletingItemId(itemId);
+    try {
+      const response = await fetch(`http://localhost:5000/api/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json' 
+        }
+      });
+
+      if (!response.ok) {
+        let errorMsg = 'Failed to delete item';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) { /* Ignore parsing error */ }
+        throw new Error(errorMsg);
+      }
+
+      toast({ title: "Item Deleted", description: "The item has been successfully deleted." });
+      setAllItems(prevItems => prevItems.filter(item => item._id !== itemId));
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      toast({ 
+        title: "Error Deleting Item", 
+        description: err instanceof Error ? err.message : 'An unknown error occurred', 
+        variant: "destructive" 
+      });
+    } finally {
+      setDeletingItemId(null);
     }
   };
 
@@ -247,7 +322,6 @@ const Admin = () => {
           </p>
         </div>
         
-        {/* Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="p-6 flex items-center justify-between">
@@ -290,29 +364,15 @@ const Admin = () => {
           </Card>
         </div>
         
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="claims">
-          <TabsList className="w-full flex-wrap mb-6">
-            <TabsTrigger value="claims" className="flex items-center">
-              <ListChecks className="h-4 w-4 mr-2" />
-              Pending Claims
-            </TabsTrigger>
-            <TabsTrigger value="high-value" className="flex items-center">
-              <ShieldAlert className="h-4 w-4 mr-2" />
-              High Value Items
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center">
-              <Users className="h-4 w-4 mr-2" />
-              User Management
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="pending-claims"><ListChecks className="mr-2 h-4 w-4"/>Pending Claims</TabsTrigger>
+            <TabsTrigger value="high-value"><ShieldAlert className="mr-2 h-4 w-4"/>High Value Items</TabsTrigger>
+            <TabsTrigger value="user-management"><Users className="mr-2 h-4 w-4"/>User Management</TabsTrigger>
+            <TabsTrigger value="item-management"><Package className="mr-2 h-4 w-4"/>Item Management</TabsTrigger>
           </TabsList>
-          
-          {/* Claims Tab */}
-          <TabsContent value="claims">
+
+          <TabsContent value="pending-claims" className="mt-6">
             <Card>
               <CardHeader>
                 <CardTitle>Pending Claims</CardTitle>
@@ -347,41 +407,40 @@ const Admin = () => {
                             </TableCell>
                             <TableCell>{claim.dateSubmitted}</TableCell>
                             <TableCell>
-                              <div className="flex space-x-2">
+                              <div className="flex gap-2">
                                 <Button 
                                   size="sm" 
-                                  variant="outline"
-                                  onClick={() => handleViewItem(claim.itemId)}
-                                >
-                                  <Eye className="h-4 w-4 mr-1" />
-                                  View
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="default" 
                                   className="bg-green-500 hover:bg-green-600 text-white"
-                                  disabled={processingClaimId === claim.id}
-                                  onClick={() => handleProcessClaim(claim.id, 'approve')}
+                                  disabled={processingClaimId === claim.itemId}
+                                  onClick={() => handleProcessClaim(claim.itemId, 'resolved')}
                                 >
-                                  {processingClaimId === claim.id ? (
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  {processingClaimId === claim.itemId ? (
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   ) : (
-                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    <CheckCircle className="mr-1 h-4 w-4" />
                                   )}
                                   Approve
                                 </Button>
                                 <Button 
                                   size="sm" 
                                   variant="destructive"
-                                  disabled={processingClaimId === claim.id}
-                                  onClick={() => handleProcessClaim(claim.id, 'reject')}
+                                  disabled={processingClaimId === claim.itemId}
+                                  onClick={() => handleProcessClaim(claim.itemId, 'rejected')}
                                 >
-                                  {processingClaimId === claim.id ? (
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                  {processingClaimId === claim.itemId ? (
+                                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                                   ) : (
-                                    <XCircle className="h-4 w-4 mr-1" />
+                                    <XCircle className="mr-1 h-4 w-4" />
                                   )}
                                   Reject
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => handleViewItem(claim.itemId)}
+                                >
+                                  <Eye className="mr-1 h-4 w-4" />
+                                  View Item
                                 </Button>
                               </div>
                             </TableCell>
@@ -445,10 +504,10 @@ const Admin = () => {
                               size="sm" 
                               variant="default" 
                               className="bg-green-500 hover:bg-green-600 text-white"
-                              disabled={processingClaimId === claim.id}
-                              onClick={() => handleProcessClaim(claim.id, 'approve')}
+                              disabled={processingClaimId === claim.itemId}
+                              onClick={() => handleProcessClaim(claim.itemId, 'resolved')}
                             >
-                              {processingClaimId === claim.id ? (
+                              {processingClaimId === claim.itemId ? (
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                               ) : (
                                 <CheckCircle className="h-4 w-4 mr-2" />
@@ -459,10 +518,10 @@ const Admin = () => {
                             <Button 
                               size="sm" 
                               variant="destructive"
-                              disabled={processingClaimId === claim.id}
-                              onClick={() => handleProcessClaim(claim.id, 'reject')}
+                              disabled={processingClaimId === claim.itemId}
+                              onClick={() => handleProcessClaim(claim.itemId, 'rejected')}
                             >
-                              {processingClaimId === claim.id ? (
+                              {processingClaimId === claim.itemId ? (
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                               ) : (
                                 <XCircle className="h-4 w-4 mr-2" />
@@ -483,8 +542,7 @@ const Admin = () => {
             </Card>
           </TabsContent>
           
-          {/* High Value Items Tab */}
-          <TabsContent value="high-value">
+          <TabsContent value="high-value" className="mt-6">
             <Card>
               <CardHeader>
                 <CardTitle>High Value Items</CardTitle>
@@ -534,87 +592,95 @@ const Admin = () => {
             </Card>
           </TabsContent>
           
-          {/* Analytics Tab */}
-          <TabsContent value="analytics">
-            <Card>
-              <CardHeader>
-                <CardTitle>Analytics</CardTitle>
-                <CardDescription>
-                  View statistics and trends for the FAST-NUCES Lost and Found system
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-8">
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">Items Overview</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <p className="text-sm font-medium">Lost Items</p>
-                            <p className="text-sm font-medium">{statsData.lostItems} / {statsData.totalItems}</p>
-                          </div>
-                          <Progress value={(statsData.lostItems / statsData.totalItems) * 100 || 0} className="h-2 bg-primary/20" />
-                        </div>
-                        
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <p className="text-sm font-medium">Found Items</p>
-                            <p className="text-sm font-medium">{statsData.foundItems} / {statsData.totalItems}</p>
-                          </div>
-                          <Progress value={(statsData.foundItems / statsData.totalItems) * 100 || 0} className="h-2 bg-primary/20" />
-                        </div>
-                        
-                        <div>
-                          <div className="flex justify-between mb-1">
-                            <p className="text-sm font-medium">Resolved Items</p>
-                            <p className="text-sm font-medium">{statsData.resolvedItems} / {statsData.totalItems}</p>
-                          </div>
-                          <Progress value={(statsData.resolvedItems / statsData.totalItems) * 100 || 0} className="h-2 bg-primary/20" />
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div className="p-4 border border-border rounded-lg bg-card/50">
-                          <h4 className="text-sm font-medium mb-2">Claim Resolution Rate</h4>
-                          <p className="text-3xl font-bold">
-                            {statsData.claimsResolved + statsData.claimsPending > 0 
-                              ? Math.round((statsData.claimsResolved / (statsData.claimsResolved + statsData.claimsPending)) * 100)
-                              : 0}%
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {statsData.claimsResolved} out of {statsData.claimsResolved + statsData.claimsPending} claims resolved
-                          </p>
-                        </div>
-                        
-                        <div className="p-4 border border-border rounded-lg bg-card/50">
-                          <h4 className="text-sm font-medium mb-2">Item Recovery Rate</h4>
-                          <p className="text-3xl font-bold">
-                            {statsData.totalItems > 0 
-                              ? Math.round((statsData.resolvedItems / statsData.totalItems) * 100)
-                              : 0}%
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {statsData.resolvedItems} out of {statsData.totalItems} items recovered
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Button size="sm">
-                      Generate Detailed Report
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <TabsContent value="user-management" className="mt-6">
+            <UserManagement />
           </TabsContent>
           
-          {/* User Management Tab */}
-          <TabsContent value="users">
-            <UserManagement />
+          <TabsContent value="item-management" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Manage All Items</CardTitle>
+                <CardDescription>View and delete reported lost and found items.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingItems ? (
+                  <div className="text-center py-10"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+                ) : itemError ? (
+                  <div className="text-center py-10 text-red-500">Error loading items: {itemError}</div>
+                ) : (
+                  <ScrollArea className="h-[60vh]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Date Reported</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Reported By</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allItems.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center h-24">No items found.</TableCell>
+                          </TableRow>
+                        ) : (
+                          allItems.map((item) => (
+                            <TableRow key={item._id}>
+                              <TableCell className="font-medium">{item.title}</TableCell>
+                              <TableCell>{item.type}</TableCell>
+                              <TableCell>{item.category}</TableCell>
+                              <TableCell>{item.date ? new Date(item.date).toLocaleDateString() : 'N/A'}</TableCell>
+                              <TableCell>
+                                <Badge variant={item.status === 'resolved' || item.status === 'claimed' ? 'default' : 'outline'} 
+                                       className={getStatusColor(item.status as ItemStatus)}>
+                                    {getStatusText(item.status as ItemStatus)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{item.user?.name || 'System?'}</TableCell>
+                              <TableCell className="text-right">
+                                 <AlertDialog>
+                                   <AlertDialogTrigger asChild>
+                                      <Button 
+                                        variant="destructive" 
+                                        size="sm" 
+                                        disabled={deletingItemId === item._id}
+                                      >
+                                         {deletingItemId === item._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4"/>}
+                                         Delete
+                                      </Button>
+                                   </AlertDialogTrigger>
+                                   <AlertDialogContent>
+                                     <AlertDialogHeader>
+                                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                       <AlertDialogDescription>
+                                         This action cannot be undone. This will permanently delete the item 
+                                         <span className="font-semibold">"{item.title}"</span> and all associated data.
+                                       </AlertDialogDescription>
+                                     </AlertDialogHeader>
+                                     <AlertDialogFooter>
+                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                       <AlertDialogAction 
+                                         onClick={() => handleDeleteItem(item._id)} 
+                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          Yes, delete item
+                                        </AlertDialogAction>
+                                     </AlertDialogFooter>
+                                   </AlertDialogContent>
+                                 </AlertDialog>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>

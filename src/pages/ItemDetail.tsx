@@ -15,6 +15,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   MapPin, 
   Clock, 
@@ -33,6 +34,16 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/context/AuthContext';
 
+interface Comment {
+  _id: string;
+  text: string;
+  createdAt: string;
+  user?: {
+    name: string;
+    _id: string;
+  };
+}
+
 interface Item {
   _id: string;
   title: string;
@@ -50,16 +61,7 @@ interface Item {
     _id: string;
   };
   identifyingFeatures?: string;
-}
-
-interface Comment {
-  _id: string;
-  text: string;
-  createdAt: string;
-  user?: {
-    name: string;
-    _id: string;
-  };
+  comments: Comment[];
 }
 
 const ItemDetail = () => {
@@ -68,7 +70,6 @@ const ItemDetail = () => {
   const { user, isAuthenticated, token } = useAuth();
   const navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -147,11 +148,12 @@ const ItemDetail = () => {
         description: "Your claim has been submitted. You will be notified when it's reviewed by an admin.",
       });
       setIsClaimDialogOpen(false);
-    } catch (err: any) {
-      console.error('Error submitting claim:', err);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error submitting claim:', error);
       toast({
         title: "Error",
-        description: err.message || "Failed to submit claim. Please try again.",
+        description: error.message || "Failed to submit claim. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -181,17 +183,24 @@ const ItemDetail = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          text: commentText
-        }),
+        body: JSON.stringify({ text: commentText }),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to post comment');
+          let errorMsg = 'Failed to post comment';
+          try {
+              const errorData = await response.json();
+              errorMsg = errorData.message || (errorData.errors && errorData.errors[0]?.msg) || errorMsg;
+          } catch (_) { /* Ignore parsing error */ }
+          throw new Error(errorMsg);
       }
       
-      const newComment = await response.json();
-      setComments([...comments, newComment]);
+      const updatedComments: Comment[] = await response.json(); 
+      
+      setItem(prevItem => 
+        prevItem ? { ...prevItem, comments: updatedComments } : null
+      );
+      
       setCommentText("");
       
       toast({
@@ -202,7 +211,7 @@ const ItemDetail = () => {
       console.error('Error posting comment:', err);
       toast({
         title: "Error",
-        description: "Failed to post comment. Please try again.",
+        description: err instanceof Error ? err.message : "Failed to post comment. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -593,59 +602,58 @@ const ItemDetail = () => {
               </div>
             )}
             
-            <div className="p-6 rounded-lg border border-border bg-card">
-              <h2 className="text-xl font-semibold mb-4">Comments</h2>
-              
-              <div className="space-y-4 mb-6">
-                {comments.length > 0 ? (
-                  comments.map((comment) => (
-                    <div key={comment._id} className="flex gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
-                        {comment.user?.name?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{comment.user?.name || 'Anonymous'}</p>
-                          <span className="text-xs text-muted-foreground">{timeAgo(comment.createdAt)}</span>
+            <Card>
+              <CardHeader>
+                 <h3 className="font-semibold text-lg flex items-center">
+                    <MessageCircle className="mr-2 h-5 w-5"/> Comments ({item.comments?.length || 0})
+                 </h3>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 mb-6">
+                  {item.comments && item.comments.length > 0 ? (
+                    item.comments.map((comment) => (
+                      <div key={comment._id} className="flex items-start space-x-3">
+                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                          {comment.user?.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
-                        <p className="text-muted-foreground">
-                          {comment.text}
-                        </p>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                             <span className="font-medium text-sm">{comment.user?.name || 'Anonymous'}</span>
+                             <span className="text-xs text-muted-foreground">{timeAgo(comment.createdAt)}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{comment.text}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">No comments yet. Be the first to comment!</p>
-                )}
-              </div>
-              
-              <div className="space-y-3">
-                <h3 className="font-semibold">Add a Comment</h3>
-                <Textarea 
-                  placeholder="Write your comment here..." 
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                />
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={handleComment} 
-                    disabled={!commentText.trim() || submitting}
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Posting...
-                      </>
-                    ) : (
-                      <>
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        Post Comment
-                      </>
-                    )}
-                  </Button>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No comments yet. Be the first to comment!</p>
+                  )}
                 </div>
-              </div>
-            </div>
+
+                {isAuthenticated ? (
+                   <div className="space-y-2">
+                      <Label htmlFor="comment" className="font-medium">Add a Comment</Label>
+                      <Textarea 
+                         id="comment"
+                         placeholder="Share your thoughts or information..." 
+                         value={commentText} 
+                         onChange={(e) => setCommentText(e.target.value)}
+                         rows={3}
+                      />
+                      <Button 
+                         onClick={handleComment} 
+                         disabled={submitting || !commentText.trim()}
+                         size="sm"
+                       >
+                         {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                         Post Comment
+                       </Button>
+                    </div>
+                 ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">Please <Link to="/login" className="text-primary underline">login</Link> to post a comment.</p>
+                 )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

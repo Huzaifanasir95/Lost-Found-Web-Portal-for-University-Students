@@ -312,19 +312,30 @@ exports.reviewItemClaim = async (req, res) => {
       return res.status(400).json({ message: 'Item is not claimed' });
     }
     
-    // Update item status
-    item.status = status;
+    const originalClaimerId = item.claimedBy; // Store original claimer for notification
+    
+    // Update item status and potentially clear claim details
+    if (status === 'resolved') {
+      item.status = 'resolved';
+      // Optionally keep claim details for history, or clear them:
+      // item.claimedBy = null;
+      // item.claim = undefined;
+    } else { // status === 'rejected'
+      item.status = 'pending'; // Set back to pending to allow new claims
+      item.claimedBy = null;    // Clear the user who claimed it
+      item.claim = undefined; // Clear the claim details
+    }
     
     await item.save();
     
     // Create notifications
     const ownerMessage = status === 'resolved' 
-      ? `Your ${item.type} item has been successfully returned to its ${item.type === 'lost' ? 'owner' : 'finder'}`
-      : `The claim for your ${item.type} item has been rejected`;
+      ? `Your ${item.type} item '${item.title}' has been successfully returned.`
+      : `The claim for your ${item.type} item '${item.title}' was rejected. The item is now available again.`;
     
     const claimerMessage = status === 'resolved'
-      ? `Your claim for the ${item.type} item has been approved`
-      : `Your claim for the ${item.type} item has been rejected`;
+      ? `Your claim for the ${item.type} item '${item.title}' has been approved.`
+      : `Your claim for the ${item.type} item '${item.title}' has been rejected.`;
     
     // Notification for item owner
     if (item.user) {
@@ -337,10 +348,10 @@ exports.reviewItemClaim = async (req, res) => {
       await ownerNotification.save();
     }
     
-    // Notification for claimer
-    if (item.claimedBy) {
+    // Notification for the original claimer (even if rejected)
+    if (originalClaimerId) {
       const claimerNotification = new Notification({
-        user: item.claimedBy,
+        user: originalClaimerId, // Use the stored ID
         message: claimerMessage,
         relatedItem: item._id
       });
@@ -351,6 +362,44 @@ exports.reviewItemClaim = async (req, res) => {
     res.json(item);
   } catch (error) {
     console.error('Error reviewing item claim:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Add comment to an item
+exports.addCommentToItem = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const newComment = {
+      text: req.body.text,
+      user: req.user.id // Assuming auth middleware adds user to req
+      // createdAt defaults via schema
+    };
+
+    item.comments.push(newComment);
+    await item.save();
+
+    // Populate user details for the newly added comment before sending response
+    await Item.populate(item, { path: 'comments.user', select: 'name email' });
+    
+    // Return only the newly added comment or the whole comments array?
+    // Returning the full updated comments array is often useful for frontend state update.
+    res.status(201).json(item.comments);
+
+  } catch (error) {
+    console.error('Error adding comment to item:', error);
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Item not found' });
     }
