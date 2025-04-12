@@ -24,6 +24,11 @@ router.get('/notifications', auth, userController.getUserNotifications);
 // @access  Private
 router.put('/notifications/:id', auth, userController.markNotificationRead);
 
+// @route   DELETE /api/users/notifications
+// @desc    Delete all notifications for current user
+// @access  Private
+router.delete('/notifications', auth, userController.deleteAllNotifications);
+
 // @route   POST /api/users
 // @desc    Create a new user (admin only)
 // @access  Private (Admin only)

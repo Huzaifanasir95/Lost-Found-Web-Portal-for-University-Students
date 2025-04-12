@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Search, Bell, User, Menu, LogOut, ShieldCheck, Check, Loader2, X } from 'lucide-react';
+import { Search, Bell, User, Menu, LogOut, ShieldCheck, Check, Loader2, X, Trash2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { 
   DropdownMenu, 
@@ -48,6 +48,7 @@ const Navigation = () => {
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null);
+  const [isClearingNotifications, setIsClearingNotifications] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -170,6 +171,44 @@ const Navigation = () => {
      setIsPopoverOpen(false); // Close popover after click
   };
 
+  // Handler for clearing all notifications
+  const handleClearAll = async () => {
+     if (!token || notifications.length === 0) return;
+     setIsClearingNotifications(true);
+     try {
+       const response = await fetch('http://localhost:5000/api/users/notifications', {
+         method: 'DELETE',
+         headers: {
+           'Authorization': `Bearer ${token}`,
+           'Accept': 'application/json',
+         },
+       });
+
+       if (!response.ok) {
+          let errorMsg = 'Failed to clear notifications';
+          try {
+             const errorData = await response.json();
+             errorMsg = errorData.message || errorMsg;
+          } catch (_) { /* Ignore parsing error */ }
+         throw new Error(errorMsg);
+       }
+
+       setNotifications([]); // Clear local state immediately
+       toast({ description: "All notifications cleared." });
+       setIsPopoverOpen(false); // Close popover
+
+     } catch (err) {
+        console.error("Error clearing notifications:", err);
+        toast({
+         title: "Error",
+         description: err instanceof Error ? err.message : 'Could not clear notifications',
+         variant: "destructive",
+       });
+     } finally {
+        setIsClearingNotifications(false);
+     }
+  };
+
   return (
     <nav className="sticky top-0 z-40 w-full backdrop-blur-md bg-background/80 border-b border-border">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
@@ -232,8 +271,23 @@ const Navigation = () => {
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 p-0">
-                <div className="p-4 font-medium border-b">Notifications</div>
+              <PopoverContent className="w-80 p-0 mt-2">
+                <div className="p-3 font-medium border-b text-sm flex justify-between items-center">
+                  <span>Notifications</span>
+                   {/* Clear All Button */} 
+                   {notifications.length > 0 && (
+                      <Button 
+                         variant="ghost" 
+                         size="sm" 
+                         className="text-xs h-auto px-2 py-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                         onClick={handleClearAll}
+                         disabled={isClearingNotifications}
+                       >
+                        {isClearingNotifications ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Trash2 className="mr-1 h-3 w-3"/>}
+                         Clear All
+                       </Button>
+                    )}
+                </div>
                 <ScrollArea className="h-[300px]">
                   {loadingNotifications ? (
                     <div className="p-4 text-center text-muted-foreground">
@@ -279,7 +333,7 @@ const Navigation = () => {
                   )}
                 </ScrollArea>
                  <div className="p-2 border-t text-center">
-                    <Button variant="link" size="sm" onClick={() => { /* TODO: Navigate to all notifications page */ setIsPopoverOpen(false); }}>
+                    <Button variant="link" size="sm" className="text-xs" onClick={() => { /* TODO: Navigate */ setIsPopoverOpen(false); }}>
                        View All Notifications
                     </Button>
                  </div>

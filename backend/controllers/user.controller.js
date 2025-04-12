@@ -1,4 +1,3 @@
-
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const bcrypt = require('bcryptjs');
@@ -53,6 +52,17 @@ exports.markNotificationRead = async (req, res) => {
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Notification not found' });
     }
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete all notifications for current user
+exports.deleteAllNotifications = async (req, res) => {
+  try {
+    await Notification.deleteMany({ user: req.user.id });
+    res.json({ message: 'All notifications deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting notifications:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
