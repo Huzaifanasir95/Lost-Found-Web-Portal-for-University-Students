@@ -1,4 +1,3 @@
-
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 const { validationResult } = require('express-validator');
@@ -6,7 +5,7 @@ const { validationResult } = require('express-validator');
 // Get all posts with filtering
 exports.getPosts = async (req, res) => {
   try {
-    const { search, resolved } = req.query;
+    const { search, resolved, user, sort, limit } = req.query;
     
     let query = {};
     
@@ -20,15 +19,49 @@ exports.getPosts = async (req, res) => {
     if (resolved) {
       query.resolved = resolved === 'true';
     }
+
+    // Filter by current user if requested
+    if (user === 'me') {
+        if (!req.user || !req.user.id) { // Ensure user is authenticated
+            return res.status(401).json({ message: 'Not authorized to view user-specific posts' });
+        }
+        query.user = req.user.id; // Add user ID to the query
+    }
     
-    const posts = await Post.find(query)
-      .populate('user', 'name')
-      .populate('comments.user', 'name')
-      .sort({ createdAt: -1 });
+    let sortOptions = { createdAt: -1 }; // Default sort
+    if (sort === 'likes') {
+        // Add a temporary field for like count to sort by
+        // This requires aggregation or we sort after fetching (less efficient for large datasets)
+        // For simplicity, let's sort after fetching if sorting by likes
+        sortOptions = null; // Disable initial DB sort
+    }
+
+    let queryBuilder = Post.find(query)
+      .populate('user', 'name') // Populate author name
+      .populate('comments.user', 'name'); // Populate commenter names
+      
+    if (sortOptions) {
+       queryBuilder = queryBuilder.sort(sortOptions);
+    }
+    
+    if (limit && !isNaN(parseInt(limit))) {
+        queryBuilder = queryBuilder.limit(parseInt(limit));
+    }
+
+    let posts = await queryBuilder.exec();
+
+    // If sorting by likes, sort the results in application code
+    if (sort === 'likes') {
+       posts.sort((a, b) => b.likes.length - a.likes.length);
+       // Apply limit again if needed after sorting
+       if (limit && !isNaN(parseInt(limit))) {
+           posts = posts.slice(0, parseInt(limit));
+       }
+    }
       
     res.json(posts);
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching posts:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

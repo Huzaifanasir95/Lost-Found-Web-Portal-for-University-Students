@@ -65,7 +65,7 @@ const Community = () => {
   const [newPostContent, setNewPostContent] = useState('');
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
 
-  // Fetch posts based on active tab
+  // Fetch posts based on active tab and search term
   useEffect(() => {
     const fetchTabData = async () => {
       setLoading(true);
@@ -73,24 +73,34 @@ const Community = () => {
       let url = 'http://localhost:5000/api/community';
       const headers: HeadersInit = { 'Accept': 'application/json' };
       let requiresAuth = false;
+      const queryParams = new URLSearchParams(); // Use URLSearchParams for query params
 
       if (activeTab === 'recent') {
-        url += '?sort=createdAt'; // Assuming default sort is recent
+        queryParams.set('sort', 'createdAt');
       } else if (activeTab === 'popular') {
-        url += '?sort=likes&limit=10'; // Add query params for sorting by likes and limiting
+        queryParams.set('sort', 'likes');
+        queryParams.set('limit', '10');
       } else if (activeTab === 'my-posts') {
         if (!isAuthenticated || !token) {
             setError("Please log in to view your posts.");
             setLoading(false);
-            setMyPosts([]); // Clear my posts if not logged in
+            setMyPosts([]); 
             return;
         }
-        url += '?user=me'; // Assuming backend understands ?user=me
+        queryParams.set('user', 'me');
         headers['Authorization'] = `Bearer ${token}`;
         requiresAuth = true;
-      } else {
-          setLoading(false);
-          return; // Should not happen
+      }
+
+      // Add search term if present
+      if (searchTerm.trim()) {
+          queryParams.set('search', searchTerm.trim());
+      }
+
+      // Append query params to URL
+      const queryString = queryParams.toString();
+      if (queryString) {
+          url += `?${queryString}`;
       }
 
       try {
@@ -124,8 +134,10 @@ const Community = () => {
       }
     };
 
+    // Debounce the fetch? Optional, but good for search inputs.
+    // For simplicity now, fetch immediately on change.
     fetchTabData();
-  }, [activeTab, token, isAuthenticated, toast]); // Re-fetch when tab or auth changes
+  }, [activeTab, token, isAuthenticated, toast, searchTerm]); // Added searchTerm to dependency array
 
   const handleCreatePost = async () => {
     if (!newPostTitle.trim() || !newPostContent.trim()) {
@@ -176,19 +188,13 @@ const Community = () => {
     }
   };
 
-  // Filter posts based on search term and active tab
-  const getPostsForCurrentTab = () => {
-      let postsToFilter: Post[] = [];
-      if (activeTab === 'recent') postsToFilter = posts;
-      else if (activeTab === 'popular') postsToFilter = popularPosts;
-      else if (activeTab === 'my-posts') postsToFilter = myPosts;
-
-      return postsToFilter.filter(post => 
-         post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         post.content.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  // Helper to get the correct list based on the tab for rendering
+  const getCurrentPostsList = () => {
+      if (activeTab === 'recent') return posts;
+      if (activeTab === 'popular') return popularPosts;
+      if (activeTab === 'my-posts') return myPosts;
+      return []; // Default empty
   };
-  const displayedPosts = getPostsForCurrentTab();
   
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -291,8 +297,8 @@ const Community = () => {
                      <div className="text-center py-10">Loading posts...</div>
                   ) : error ? (
                      <div className="text-center py-10 text-red-500">Error: {error}</div>
-                  ) : displayedPosts.length > 0 ? (
-                    displayedPosts.map((post) => (
+                  ) : getCurrentPostsList().length > 0 ? (
+                    getCurrentPostsList().map((post) => (
                       <CommunityPost key={`${activeTab}-${post._id}`} post={post} />
                     ))
                   ) : (

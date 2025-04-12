@@ -1,14 +1,13 @@
-
 const express = require('express');
 const router = express.Router();
 const { check } = require('express-validator');
 const communityController = require('../controllers/community.controller');
-const { auth } = require('../middleware/auth');
+const { auth, optionalAuth } = require('../middleware/auth');
 
 // @route   GET /api/community
 // @desc    Get all posts with filtering
-// @access  Public
-router.get('/', communityController.getPosts);
+// @access  Public (but uses optional auth for user-specific filtering)
+router.get('/', optionalAuth, communityController.getPosts);
 
 // @route   GET /api/community/:id
 // @desc    Get a single post by ID
