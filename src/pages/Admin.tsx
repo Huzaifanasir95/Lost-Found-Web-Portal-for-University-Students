@@ -73,6 +73,10 @@ import {
   Bar 
 } from 'recharts';
 
+// Import PDF generation libraries
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 interface Claim {
   id: string;
   itemId: string;
@@ -482,16 +486,103 @@ const Admin = () => {
     { name: 'Resolved Claims', count: statsData.claimsResolved + statsData.resolvedItems }, // Combine resolved claims and items for simplicity here
   ];
 
-  // Function to handle report download (simulated)
-  const handleDownloadReport = (report: GeneratedReport) => {
-    toast({ 
-      title: "Download Started (Simulated)",
-      description: `Downloading ${report.filename}...`
+  // Function to handle report download (IMPLEMENTED)
+  const handleDownloadReport = async (report: GeneratedReport) => {
+    toast({
+      title: "Generating Report...",
+      description: `Preparing ${report.filename} for download...`
     });
-    console.log(`Attempting to download report from: ${report.downloadUrl}`);
-    // In a real implementation, you might use:
-    // window.open(report.downloadUrl, '_blank'); 
-    // Or fetch the file blob and trigger download via JavaScript
+
+    setLoadingReportActivity(true); // Use loading state for visual feedback
+    let logsToInclude: ClaimLogEntry[] = [];
+
+    try {
+      // Fetch latest logs for the 'Recent Activity' section
+      const response = await fetch('http://localhost:5000/api/admin/claim-logs', {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent activity for report download');
+      }
+      logsToInclude = (await response.json()).slice(0, 10); // Get latest 10 logs
+
+      // --- PDF Generation --- 
+      const doc = new jsPDF();
+
+      // Title and Metadata
+      doc.setFontSize(18);
+      doc.text('System Status Report', 14, 22);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text(`Filename: ${report.filename}`, 14, 30);
+      doc.text(`Type: ${report.type}`, 14, 36); // Added report type
+      doc.text(`Generated At: ${new Date(report.generatedAt).toLocaleString()}`, 14, 42);
+      doc.text(`Downloaded At: ${new Date().toLocaleString()}`, 14, 48);
+
+      // --- Summary Sections (Using current statsData) ---
+      let currentY = 60;
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.text('Items Summary (Current Snapshot)', 14, currentY);
+      currentY += 7;
+      doc.setFontSize(10);
+      doc.text(`Total Items: ${statsData.totalItems}`, 16, currentY);
+      doc.text(`Lost Items: ${statsData.lostItems}`, 100, currentY);
+      currentY += 6;
+      doc.text(`Found Items: ${statsData.foundItems}`, 16, currentY);
+      doc.text(`Resolved Items: ${statsData.resolvedItems}`, 100, currentY);
+      currentY += 12;
+
+      doc.setFontSize(14);
+      doc.text('Claims Activity (Current Snapshot)', 14, currentY);
+      currentY += 7;
+      doc.setFontSize(10);
+      doc.text(`Pending Claims: ${statsData.claimsPending}`, 16, currentY);
+      doc.text(`Processed Claims (Cumulative): ${statsData.claimsResolved}`, 100, currentY); // Clarified label
+      currentY += 15;
+
+      // --- Recent Activity Table ---
+      doc.setFontSize(14);
+      doc.text('Recent Activity (Latest Logs)', 14, currentY);
+      currentY += 4; // Adjust spacing before table
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Item', 'Action', 'Claimant', 'Admin', 'Date']],
+        body: logsToInclude.map(log => [
+          log.itemTitle,
+          log.action === 'approved' ? 'Approved' : 'Rejected',
+          log.claimantName || 'N/A', // Handle potentially missing name
+          log.adminName,
+          new Date(log.timestamp).toLocaleString()
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 }, // Blue header
+        margin: { top: 10 }
+      });
+
+      // --- Save PDF ---
+      // Ensure filename ends with .pdf
+      const finalFilename = report.filename.toLowerCase().endsWith('.pdf') 
+                            ? report.filename 
+                            : `${report.filename}.pdf`;
+      doc.save(finalFilename);
+
+      toast({
+        title: "Download Ready",
+        description: `${finalFilename} has been downloaded.`,
+      });
+
+    } catch (error) {
+      console.error('Error generating report PDF:', error);
+      toast({
+        title: "Error Generating Report",
+        description: error instanceof Error ? error.message : "Could not generate the report PDF. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingReportActivity(false);
+    }
   };
 
   // Create test logs if none exist
@@ -1178,11 +1269,20 @@ const Admin = () => {
                                <TableCell className="text-right">
                                  <div className="flex justify-end space-x-2">
                                     <Button variant="outline" size="sm" onClick={() => handleViewReport(report)}>
-                                      <Eye className="mr-2 h-4 w-4"/>
+                                      <Eye className="mr-2 h-4 w-4" />
                                       View
                                     </Button>
-                                   <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
-                                     <Download className="mr-2 h-4 w-4"/>
+                                   <Button 
+                                     variant="outline" 
+                                     size="sm" 
+                                     onClick={() => handleDownloadReport(report)}
+                                     disabled={loadingReportActivity} // Disable button while generating PDF
+                                   >
+                                     {loadingReportActivity ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                     ) : (
+                                        <Download className="mr-2 h-4 w-4" />
+                                     )}
                                      Download
                                    </Button>
                                  </div>
@@ -1201,117 +1301,117 @@ const Admin = () => {
                   )}
                 </div>
 
-                {/* Add a report viewer modal/dialog */}
+                {/* View Report Modal */} 
                 {viewingReport && (
-                  <AlertDialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>
-                    <AlertDialogContent className="max-w-3xl">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {viewingReport.filename}
-                          <Badge variant="outline" className="ml-2 capitalize">{viewingReport.type}</Badge>
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Generated on {new Date(viewingReport.generatedAt).toLocaleString()}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      
-                      <div className="my-4 p-4 border rounded bg-muted/30 max-h-[60vh] overflow-auto">
-                        {/* Use real stats (current snapshot) - Needs backend change for historical data */}
-                        <h3 className="text-lg font-semibold mb-4">{viewingReport.type === 'daily' ? 'Daily' : 'Weekly'} System Status Report</h3>
-                        
-                        <div className="space-y-4">
-                          <div>
-                            <h4 className="font-medium">Items Summary (Current Snapshot)</h4>
-                            {/* Display current statsData - needs backend change for report-specific stats */}
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                              {/* ... keep existing stats display using statsData ... */}
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Total Items:</span>
-                                <span className="float-right font-medium">{statsData.totalItems}</span>
-                              </div>
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Lost Items:</span>
-                                <span className="float-right font-medium">{statsData.lostItems}</span>
-                              </div>
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Found Items:</span>
-                                <span className="float-right font-medium">{statsData.foundItems}</span>
-                              </div>
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Resolved Items:</span>
-                                <span className="float-right font-medium">{statsData.resolvedItems}</span>
-                              </div>                              
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h4 className="font-medium">Claims Activity (Current Snapshot)</h4>
+                   <AlertDialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>
+                     <AlertDialogContent className="max-w-3xl">
+                       <AlertDialogHeader>
+                         <AlertDialogTitle>
+                           {viewingReport.filename}
+                           <Badge variant="outline" className="ml-2 capitalize">{viewingReport.type}</Badge>
+                         </AlertDialogTitle>
+                         <AlertDialogDescription>
+                           Generated on {new Date(viewingReport.generatedAt).toLocaleString()}
+                         </AlertDialogDescription>
+                       </AlertDialogHeader>
+                       
+                       <div className="my-4 p-4 border rounded bg-muted/30 max-h-[60vh] overflow-auto">
+                         {/* Use real stats (current snapshot) - Needs backend change for historical data */}
+                         <h3 className="text-lg font-semibold mb-4">{viewingReport.type === 'daily' ? 'Daily' : 'Weekly'} System Status Report</h3>
+                         
+                         <div className="space-y-4">
+                           <div>
+                             <h4 className="font-medium">Items Summary (Current Snapshot)</h4>
                              {/* Display current statsData - needs backend change for report-specific stats */}
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                              {/* ... keep existing stats display using statsData ... */}
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Pending Claims:</span>
-                                <span className="float-right font-medium">{statsData.claimsPending}</span>
-                              </div>
-                              <div className="bg-background p-2 rounded">
-                                <span className="text-muted-foreground text-sm">Processed Claims:</span>
-                                <span className="float-right font-medium">{statsData.claimsResolved}</span>
-                              </div>                              
-                            </div>
-                          </div>
-                          
-                          <div>
-                            <h4 className="font-medium">Recent Activity (Latest Logs)</h4>
-                            {loadingReportActivity ? (
-                              <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
-                            ) : (
-                              <Table className="mt-2">
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Item</TableHead>
-                                    <TableHead>Action</TableHead>
-                                    <TableHead>Admin</TableHead>
-                                    <TableHead>Date</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {reportActivityLogs.length > 0 ? (
-                                    reportActivityLogs.map(log => (
-                                      <TableRow key={log._id}>
-                                        <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => handleViewItem(log.itemId)}>
-                                          {log.itemTitle}
-                                        </TableCell>
-                                        <TableCell>
-                                          <Badge variant={log.action === 'approved' ? 'default' : 'destructive'} className={log.action === 'approved' ? 'bg-green-500 text-white' : ''}>
-                                            {log.action === 'approved' ? 'Approved' : 'Rejected'}
-                                          </Badge>
-                                        </TableCell>
-                                        <TableCell>{log.adminName}</TableCell>
-                                        <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
-                                      </TableRow>
-                                    ))
-                                  ) : (
-                                    <TableRow>
-                                      <TableCell colSpan={4} className="text-center h-24">No recent activity logs found.</TableCell>
-                                    </TableRow>
-                                  )}
-                                </TableBody>
-                              </Table>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Close</AlertDialogCancel>
-                        <Button onClick={() => handleDownloadReport(viewingReport)}>
-                          <Download className="mr-2 h-4 w-4"/>
-                          Download
-                        </Button>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
+                             <div className="grid grid-cols-2 gap-2 mt-2">
+                               {/* ... keep existing stats display using statsData ... */}
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Total Items:</span>
+                                 <span className="float-right font-medium">{statsData.totalItems}</span>
+                               </div>
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Lost Items:</span>
+                                 <span className="float-right font-medium">{statsData.lostItems}</span>
+                               </div>
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Found Items:</span>
+                                 <span className="float-right font-medium">{statsData.foundItems}</span>
+                               </div>
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Resolved Items:</span>
+                                 <span className="float-right font-medium">{statsData.resolvedItems}</span>
+                               </div>                              
+                             </div>
+                           </div>
+                           
+                           <div>
+                             <h4 className="font-medium">Claims Activity (Current Snapshot)</h4>
+                              {/* Display current statsData - needs backend change for report-specific stats */}
+                             <div className="grid grid-cols-2 gap-2 mt-2">
+                               {/* ... keep existing stats display using statsData ... */}
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Pending Claims:</span>
+                                 <span className="float-right font-medium">{statsData.claimsPending}</span>
+                               </div>
+                               <div className="bg-background p-2 rounded">
+                                 <span className="text-muted-foreground text-sm">Processed Claims:</span>
+                                 <span className="float-right font-medium">{statsData.claimsResolved}</span>
+                               </div>                              
+                             </div>
+                           </div>
+                           
+                           <div>
+                             <h4 className="font-medium">Recent Activity (Latest Logs)</h4>
+                             {loadingReportActivity ? (
+                               <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+                             ) : (
+                               <Table className="mt-2">
+                                 <TableHeader>
+                                   <TableRow>
+                                     <TableHead>Item</TableHead>
+                                     <TableHead>Action</TableHead>
+                                     <TableHead>Admin</TableHead>
+                                     <TableHead>Date</TableHead>
+                                   </TableRow>
+                                 </TableHeader>
+                                 <TableBody>
+                                   {reportActivityLogs.length > 0 ? (
+                                     reportActivityLogs.map(log => (
+                                       <TableRow key={log._id}>
+                                         <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => handleViewItem(log.itemId)}>
+                                           {log.itemTitle}
+                                         </TableCell>
+                                         <TableCell>
+                                           <Badge variant={log.action === 'approved' ? 'default' : 'destructive'} className={log.action === 'approved' ? 'bg-green-500 text-white' : ''}>
+                                             {log.action === 'approved' ? 'Approved' : 'Rejected'}
+                                           </Badge>
+                                         </TableCell>
+                                         <TableCell>{log.adminName}</TableCell>
+                                         <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                                       </TableRow>
+                                     ))
+                                   ) : (
+                                     <TableRow>
+                                       <TableCell colSpan={4} className="text-center h-24">No recent activity logs found.</TableCell>
+                                     </TableRow>
+                                   )}
+                                 </TableBody>
+                               </Table>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                       
+                       <AlertDialogFooter>
+                         <AlertDialogCancel>Close</AlertDialogCancel>
+                         <Button onClick={() => handleDownloadReport(viewingReport)}>
+                           <Download className="mr-2 h-4 w-4"/>
+                           Download
+                         </Button>
+                       </AlertDialogFooter>
+                     </AlertDialogContent>
+                   </AlertDialog>
+                 )}
               </CardContent>
             </Card>
           </TabsContent>
