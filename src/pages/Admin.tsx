@@ -161,6 +161,23 @@ interface GeneratedReport {
 const COLORS = ['#FF8042', '#00C49F', '#FFBB28', '#0088FE']; // Example: Orange, Teal, Yellow, Blue
 const CLAIM_COLORS = ['#FFBB28', '#00C49F']; // Example: Yellow (Pending), Teal (Resolved)
 
+// --- Define Pickup Locations ---
+const pickupLocations = [
+  "One Stop (Student Affairs)",
+  "CS Department Office",
+  "EE Department Office",
+  "Central Academic Office",
+  "Main Gate Security Office",
+  "Sports Complex Office"
+];
+
+// Interface to hold info for the approval dialog
+interface ApprovingClaimInfo {
+  itemId: string;
+  itemName: string;
+  claimantName: string;
+}
+
 const Admin = () => {
   const { isAuthenticated, isAdmin, token } = useAuth();
   const navigate = useNavigate();
@@ -193,6 +210,10 @@ const Admin = () => {
   const [itemError, setItemError] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [updatingStatusItemId, setUpdatingStatusItemId] = useState<string | null>(null);
+
+  // --- State for Approval Dialog ---
+  const [approvingClaimInfo, setApprovingClaimInfo] = useState<ApprovingClaimInfo | null>(null);
+  const [selectedPickupLocation, setSelectedPickupLocation] = useState<string>("");
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -343,58 +364,116 @@ const Admin = () => {
     navigate(`/items/${itemId}`);
   };
 
-  const handleProcessClaim = async (itemId: string, action: 'approve' | 'reject') => {
+  // --- Updated Claim Processing Logic ---
+  const handleProcessClaim = async (claimDetails: Claim | ApprovingClaimInfo, action: 'approve' | 'reject') => {
+    // If approving, show the dialog first
+    if (action === 'approve') {
+      setApprovingClaimInfo({ 
+        itemId: claimDetails.itemId, // Ensure claimDetails has itemId
+        itemName: claimDetails.itemName,
+        claimantName: claimDetails.claimantName
+      });
+      setSelectedPickupLocation(""); // Reset location selection
+      return; // Stop here, dialog will handle the rest
+    }
+
+    // --- Handle Rejection Directly (No Dialog Needed) ---
+    const itemId = claimDetails.itemId;
     setProcessingClaimId(itemId);
-    const status = action === 'approve' ? 'resolved' : 'rejected'; // Determine status for logging/toast
     console.log(`Processing claim for item ${itemId} via admin route with action ${action}.`);
     
     try {
-      // Use the dedicated admin route that includes logging
       const response = await fetch(`http://localhost:5000/api/admin/claims/${itemId}/${action}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          // No Content-Type needed if body is empty, but action is in URL
           'Accept': 'application/json'
         },
-        // Body might not be needed if status is derived from URL action, check backend route
-        // body: JSON.stringify({ status: status }) // Potentially remove if backend uses URL param
       });
       
       if (!response.ok) {
         let errorMsg = `Failed to ${action} claim`;
-        try {
+        try { 
           const errorData = await response.json();
           errorMsg = errorData.message || errorMsg;
-        } catch (_) {
-          // Ignore if response is not JSON
+        } catch (_) { 
+          // Ignore parsing error, default message will be used
         }
         throw new Error(errorMsg);
       }
       
-      // Assuming success response means item was updated and log created
       toast({
-        title: action === 'approve' ? "Claim Approved" : "Claim Rejected",
-        description: `The claim has been ${status} and logged successfully.`,
+        title: "Claim Rejected",
+        description: `The claim has been rejected and logged successfully.`,
       });
       
       // Refresh claims list and stats
       setClaims(prevClaims => prevClaims.filter(claim => claim.itemId !== itemId));
       setStatsData(prev => ({
-        ...prev,
-        claimsPending: prev.claimsPending - 1,
-        // Adjust resolved count based on the actual status update
-        resolvedItems: status === 'resolved' ? prev.resolvedItems + 1 : prev.resolvedItems,
-        // claimsResolved might also need update depending on backend stats logic
+          ...prev,
+          claimsPending: prev.claimsPending - 1,
       }));
       
     } catch (err) {
       console.error(`Error ${action}ing claim:`, err);
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : `Failed to ${action} the claim. Please try again.`,
-        variant: "destructive",
+      toast({ /* ... keep error toast ... */ });
+    } finally {
+      setProcessingClaimId(null);
+    }
+  };
+
+  // --- Function called when confirming approval from dialog ---
+  const confirmApproveClaim = async () => {
+    if (!approvingClaimInfo || !selectedPickupLocation) {
+      toast({ title: "Error", description: "Please select a pickup location.", variant: "destructive" });
+      return;
+    }
+
+    const { itemId } = approvingClaimInfo;
+    const action = 'approve';
+    setProcessingClaimId(itemId); // Show loading state on original button
+    setApprovingClaimInfo(null); // Close dialog immediately
+
+    console.log(`Confirming approval for item ${itemId} with location: ${selectedPickupLocation}`);
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/admin/claims/${itemId}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json', // Need content-type for body
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ pickupLocation: selectedPickupLocation }) // Send location in body
       });
+
+      if (!response.ok) {
+        let errorMsg = `Failed to ${action} claim`;
+        try { 
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) { 
+          // Ignore parsing error, default message will be used
+        }
+        throw new Error(errorMsg);
+      }
+
+      toast({
+        title: "Claim Approved",
+        description: `The claim has been approved and logged. Pickup at: ${selectedPickupLocation}.`,
+      });
+
+      // Refresh claims list and stats
+      setClaims(prevClaims => prevClaims.filter(claim => claim.itemId !== itemId));
+      setStatsData(prev => ({ 
+          ...prev,
+          claimsPending: prev.claimsPending - 1,
+          resolvedItems: prev.resolvedItems + 1 
+      }));
+
+    } catch (err) {
+      console.error(`Error ${action}ing claim:`, err);
+      toast({ title: "Error", description: err instanceof Error ? err.message : `Failed to ${action} the claim.`, variant: "destructive" });
     } finally {
       setProcessingClaimId(null);
     }
@@ -785,7 +864,7 @@ const Admin = () => {
               <CardContent>
                 {claims.length > 0 ? (
                   <div className="space-y-4">
-                    <Table>
+                    <Table className="hidden md:table">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Item Name</TableHead>
@@ -814,7 +893,7 @@ const Admin = () => {
                                   size="sm" 
                                   className="bg-green-500 hover:bg-green-600 text-white"
                                   disabled={processingClaimId === claim.itemId}
-                                  onClick={() => handleProcessClaim(claim.itemId, 'approve')}
+                                  onClick={() => handleProcessClaim(claim, 'approve')}
                                 >
                                   {processingClaimId === claim.itemId ? (
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -827,7 +906,7 @@ const Admin = () => {
                                   size="sm" 
                                   variant="destructive"
                                   disabled={processingClaimId === claim.itemId}
-                                  onClick={() => handleProcessClaim(claim.itemId, 'reject')}
+                                  onClick={() => handleProcessClaim(claim, 'reject')}
                                 >
                                   {processingClaimId === claim.itemId ? (
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -850,12 +929,10 @@ const Admin = () => {
                         ))}
                       </TableBody>
                     </Table>
-                    <div className="mt-4">
+
+                    <div className="space-y-4 md:hidden">
                       {claims.map((claim) => (
-                        <div 
-                          key={claim.id}
-                          className="p-4 border border-border rounded-lg bg-card/50 hover:bg-card/80 transition-colors mb-4"
-                        >
+                        <div key={claim.id} className="p-4 border border-border rounded-lg bg-card/50 hover:bg-card/80 transition-colors mb-4">
                           <div className="flex flex-col md:flex-row justify-between mb-2">
                             <div>
                               <h3 className="text-lg font-medium">{claim.itemName}</h3>
@@ -865,7 +942,7 @@ const Admin = () => {
                             </div>
                             <div className="md:text-right mt-2 md:mt-0">
                               <p className="text-sm text-muted-foreground">
-                                Submitted: {claim.dateSubmitted}
+                                Submitted: {new Date(claim.dateSubmitted).toLocaleDateString()}
                               </p>
                               <Badge 
                                 className={`${claim.itemType === 'lost' ? 'bg-red-500' : 'bg-green-500'} text-white uppercase`}
@@ -896,39 +973,32 @@ const Admin = () => {
                             </p>
                           </div>
                           
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => handleViewItem(claim.itemId)}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Item
-                            </Button>
-                            
+                          <div className="flex gap-2 mt-4 justify-end">
                             <Button 
                               size="sm" 
-                              variant="default" 
                               className="bg-green-500 hover:bg-green-600 text-white"
                               disabled={processingClaimId === claim.itemId}
-                              onClick={() => handleProcessClaim(claim.itemId, 'approve')}
+                              onClick={() => handleProcessClaim(claim, 'approve')}
                             >
-                              {processingClaimId === claim.itemId ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                              )}
+                              {processingClaimId === claim.itemId ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-1 h-4 w-4" />}
                               Approve
                             </Button>
-                            
                             <Button 
                               size="sm" 
                               variant="destructive"
                               disabled={processingClaimId === claim.itemId}
-                              onClick={() => handleProcessClaim(claim.itemId, 'reject')}
+                              onClick={() => handleProcessClaim(claim, 'reject')}
                             >
-                              {processingClaimId === claim.itemId ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <XCircle className="h-4 w-4 mr-2" />
-                              )}
+                              {processingClaimId === claim.itemId ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4" />}
                               Reject
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleViewItem(claim.itemId)}
+                            >
+                              <Eye className="mr-1 h-4 w-4" />
+                              View Item
                             </Button>
                           </div>
                         </div>
@@ -1477,6 +1547,53 @@ const Admin = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* --- Approval Confirmation Dialog --- */}
+        <AlertDialog open={!!approvingClaimInfo} onOpenChange={() => !processingClaimId && setApprovingClaimInfo(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Approval & Select Pickup Location</AlertDialogTitle>
+              <AlertDialogDescription>
+                You are approving the claim for "{approvingClaimInfo?.itemName}" by {approvingClaimInfo?.claimantName}. 
+                Please select the designated location for item pickup/drop-off.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            
+            <div className="py-4">
+              <Label htmlFor="pickup-location">Pickup/Drop-off Location</Label>
+              <Select 
+                value={selectedPickupLocation}
+                onValueChange={setSelectedPickupLocation}
+              >
+                <SelectTrigger id="pickup-location" className="w-full mt-1">
+                  <SelectValue placeholder="Select a location..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {pickupLocations.map(location => (
+                    <SelectItem key={location} value={location}>{location}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={!!processingClaimId}>Cancel</AlertDialogCancel>
+              <Button 
+                onClick={confirmApproveClaim} 
+                disabled={!selectedPickupLocation || !!processingClaimId}
+                className="bg-green-500 hover:bg-green-600 text-white"
+              >
+                {processingClaimId === approvingClaimInfo?.itemId ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                ) : (
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                )}
+                Confirm Approval
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </main>
       
       <Footer />

@@ -295,30 +295,43 @@ exports.reviewItemClaim = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
     
-    const { status } = req.body;
+    // Extract status and pickupLocation from body
+    const { status, pickupLocation } = req.body;
     
     if (!status || (status !== 'resolved' && status !== 'rejected')) {
       return res.status(400).json({ message: 'Invalid status' });
     }
+
+    // Validate pickupLocation only if resolving
+    if (status === 'resolved' && !pickupLocation) {
+       return res.status(400).json({ message: 'Pickup location is required for approval' });
+    }
     
-    const item = await Item.findById(req.params.id)
-      .populate('claimedBy', 'name email'); // Populate claimant details
+    // Find item first
+    let item = await Item.findById(req.params.id);
     
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
     
+    // Populate necessary fields (safer approach for linters)
+    item = await item.populate([ 
+        { path: 'claimedBy', select: 'name email' }, 
+        { path: 'user', select: 'name email' } 
+    ]);
+    
     // Check if item is claimed
     if (item.status !== 'claimed') {
-      return res.status(400).json({ message: 'Item is not claimed' });
+      return res.status(400).json({ message: 'Item is not in a \'claimed\' state' });
     }
     
-    const originalClaimerId = item.claimedBy ? item.claimedBy._id : null; // Store original claimer for notification
+    const originalClaimer = item.claimedBy; // Store original claimer object for notification
+    const itemOwner = item.user; // Store item owner object for notification
     
     // Store claim information for logging
     const claimInfo = {
-      user: originalClaimerId,
-      claimantName: item.claimedBy ? item.claimedBy.name : 'Anonymous',
+      user: originalClaimer ? originalClaimer._id : null,
+      claimantName: originalClaimer ? originalClaimer.name : 'Anonymous',
       itemId: item._id,
       itemTitle: item.title,
       action: status === 'resolved' ? 'approved' : 'rejected'
@@ -327,9 +340,8 @@ exports.reviewItemClaim = async (req, res) => {
     // Update item status and potentially clear claim details
     if (status === 'resolved') {
       item.status = 'resolved';
-      // Optionally keep claim details for history, or clear them:
-      // item.claimedBy = null;
-      // item.claim = undefined;
+      // We might want to store the pickup location on the item itself if needed later?
+      // item.pickupLocation = pickupLocation; // Example if needed
     } else { // status === 'rejected'
       item.status = 'pending'; // Set back to pending to allow new claims
       item.claimedBy = null;    // Clear the user who claimed it
@@ -338,38 +350,40 @@ exports.reviewItemClaim = async (req, res) => {
     
     await item.save();
     
-    // Create notifications
-    const ownerMessage = status === 'resolved' 
-      ? `Your ${item.type} item '${item.title}' has been successfully returned.`
-      : `The claim for your ${item.type} item '${item.title}' was rejected. The item is now available again.`;
+    // --- Create notifications with pickup location details ---
+    let ownerMessage = `Update on your ${item.type} item '${item.title}'.`; // Default message
+    let claimerMessage = `Update on your claim for the ${item.type} item '${item.title}'.`; // Default message
+
+    if (status === 'resolved') {
+      // Use itemOwner and originalClaimer directly for user IDs
+      ownerMessage = `Good news! Your ${item.type} item '${item.title}' has been claimed and approved. Please arrange pickup/drop-off at: ${pickupLocation}. Contact the claimant (${originalClaimer?.name || 'N/A'} - ${originalClaimer?.email || 'N/A'}) if needed.`;
+      claimerMessage = `Your claim for the ${item.type} item '${item.title}' has been approved! Please coordinate the pickup/drop-off at the designated location: ${pickupLocation}. Contact the owner (${itemOwner?.name || 'Reporter'} - ${itemOwner?.email || 'N/A'}) if needed.`;
+    } else { // status === 'rejected'
+      ownerMessage = `The claim for your ${item.type} item '${item.title}' was rejected. The item is now available again.`;
+      claimerMessage = `Unfortunately, your claim for the ${item.type} item '${item.title}' has been rejected by the admin.`;
+    }
     
-    const claimerMessage = status === 'resolved'
-      ? `Your claim for the ${item.type} item '${item.title}' has been approved.`
-      : `Your claim for the ${item.type} item '${item.title}' has been rejected.`;
-    
-    // Notification for item owner
-    if (item.user) {
+    // Notification for item owner (if they exist)
+    if (itemOwner) {
       const ownerNotification = new Notification({
-        user: item.user,
+        user: itemOwner._id,
         message: ownerMessage,
         relatedItem: item._id
       });
-      
       await ownerNotification.save();
     }
     
-    // Notification for the original claimer (even if rejected)
-    if (originalClaimerId) {
+    // Notification for the original claimer (if they exist)
+    if (originalClaimer) {
       const claimerNotification = new Notification({
-        user: originalClaimerId, // Use the stored ID
+        user: originalClaimer._id, // Use the stored ID
         message: claimerMessage,
         relatedItem: item._id
       });
-      
       await claimerNotification.save();
     }
     
-    // Return both item and claim info for logging purposes
+    // Return both item and claim info for logging purposes in the admin route
     return {
       item: item,
       claim: claimInfo,

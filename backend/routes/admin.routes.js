@@ -11,18 +11,26 @@ router.get('/claims', [auth, admin], itemsController.getPendingClaims);
 router.post('/claims/:id/:action', [auth, admin], async (req, res) => {
   try {
     const { id, action } = req.params;
+    const { pickupLocation } = req.body;
     
     if (action !== 'approve' && action !== 'reject') {
       return res.status(400).json({ message: 'Invalid action' });
     }
     
+    if (action === 'approve' && !pickupLocation) {
+       return res.status(400).json({ message: 'Pickup location is required for approval' });
+    }
+    
     const status = action === 'approve' ? 'resolved' : 'rejected';
     
-    // Use the existing review functionality
+    // Pass necessary info to the controller via req object
     req.body.status = status;
     req.params.id = id;
+    if (action === 'approve') {
+        req.body.pickupLocation = pickupLocation;
+    }
     
-    // Call the existing controller function but handle the returned data
+    // Call the existing controller function which now needs to handle pickupLocation
     const reviewResult = await itemsController.reviewItemClaim(req, res);
     
     // If reviewResult is null or undefined, the controller already sent a response
