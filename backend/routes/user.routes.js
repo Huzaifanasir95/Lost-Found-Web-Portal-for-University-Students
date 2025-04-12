@@ -107,4 +107,19 @@ router.put(
   userController.changePassword
 );
 
+// @route   GET /api/users/me/items/lost
+// @desc    Get items reported as lost by the current user
+// @access  Private
+router.get('/me/items/lost', auth, userController.getMyLostItems);
+
+// @route   GET /api/users/me/items/found
+// @desc    Get items reported as found by the current user
+// @access  Private
+router.get('/me/items/found', auth, userController.getMyFoundItems);
+
+// @route   GET /api/users/me/items/claimed
+// @desc    Get items claimed by the current user
+// @access  Private
+router.get('/me/items/claimed', auth, userController.getMyClaimedItems);
+
 module.exports = router;

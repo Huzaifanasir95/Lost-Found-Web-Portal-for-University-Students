@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
+const Item = require('../models/Item');
 
 // Get current user
 exports.getCurrentUser = async (req, res) => {
@@ -297,5 +298,42 @@ exports.changeUserStatus = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get items reported as lost by the current user
+exports.getMyLostItems = async (req, res) => {
+  try {
+    const items = await Item.find({ user: req.user.id, type: 'lost' })
+                          .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching user lost items:', error);
+    res.status(500).send('Server Error');
+  }
+};
+
+// Get items reported as found by the current user
+exports.getMyFoundItems = async (req, res) => {
+  try {
+    const items = await Item.find({ user: req.user.id, type: 'found' })
+                          .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching user found items:', error);
+    res.status(500).send('Server Error');
+  }
+};
+
+// Get items claimed by the current user
+exports.getMyClaimedItems = async (req, res) => {
+  try {
+    // Find items where the claimedBy field matches the current user's ID
+    const items = await Item.find({ claimedBy: req.user.id })
+                          .sort({ updatedAt: -1 }); // Sort by claim/update time
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching user claimed items:', error);
+    res.status(500).send('Server Error');
   }
 };
