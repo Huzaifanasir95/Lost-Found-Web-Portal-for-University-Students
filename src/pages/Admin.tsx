@@ -27,7 +27,8 @@ import {
   Loader2,
   RefreshCcw,
   FileText,
-  History
+  History,
+  Download
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -179,6 +180,9 @@ const Admin = () => {
   const [loadingClaimHistory, setLoadingClaimHistory] = useState(false);
   const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [viewingReport, setViewingReport] = useState<GeneratedReport | null>(null);
+  const [reportActivityLogs, setReportActivityLogs] = useState<ClaimLogEntry[]>([]);
+  const [loadingReportActivity, setLoadingReportActivity] = useState(false);
 
   const [allItems, setAllItems] = useState<Item[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -256,24 +260,39 @@ const Admin = () => {
 
   useEffect(() => {
     const fetchClaimHistory = async () => {
-      if (activeTab === 'claim-history' && isAuthenticated && isAdmin && token) {
+      if (activeTab === 'logs' && isAuthenticated && isAdmin && token) {
         setLoadingClaimHistory(true);
-        console.log("Fetching claim history... (placeholder)");
-        // Replace with actual API call:
-        // const response = await fetch('/api/admin/claim-history', { headers: { 'Authorization': `Bearer ${token}` } });
-        // if (response.ok) {
-        //   const data = await response.json();
-        //   setClaimHistory(data);
-        // } else {
-        //   toast({ title: "Error", description: "Failed to load claim history.", variant: "destructive" });
-        // }
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-        // Mock data for now:
-        setClaimHistory([
-          { _id: 'log1', itemId: 'item123', itemTitle: 'Lost Laptop', claimantName: 'John Doe', adminName: 'Admin User', action: 'approved', timestamp: new Date(Date.now() - 86400000).toISOString() },
-          { _id: 'log2', itemId: 'item456', itemTitle: 'Found Wallet', claimantName: 'Jane Smith', adminName: 'Admin User', action: 'approved', timestamp: new Date(Date.now() - 172800000).toISOString() },
-        ]);
-        setLoadingClaimHistory(false);
+        try {
+          // Fetch real claim logs from the backend
+          const response = await fetch('http://localhost:5000/api/admin/claim-logs', { 
+            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch claim logs');
+          }
+          
+          const data = await response.json();
+          if (data && data.length > 0) {
+            setClaimHistory(data);
+          } else {
+            // If no logs found from API, check if we have mock logs
+            if (claimHistory.length === 0) {
+              // For demo purposes, you might want to auto-generate some test logs
+              console.log('No logs found from API, using mock data');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching claim logs:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load claim history. Please try again later.",
+            variant: "destructive",
+          });
+          // Don't clear existing data if there was an error
+        } finally {
+          setLoadingClaimHistory(false);
+        }
       }
     };
     fetchClaimHistory();
@@ -320,44 +339,56 @@ const Admin = () => {
     navigate(`/items/${itemId}`);
   };
 
-  const handleProcessClaim = async (itemId: string, newStatus: 'resolved' | 'rejected') => {
+  const handleProcessClaim = async (itemId: string, action: 'approve' | 'reject') => {
     setProcessingClaimId(itemId);
-    console.log(`Processing claim for item ${itemId} to status ${newStatus}. Backend should log this.`);
+    const status = action === 'approve' ? 'resolved' : 'rejected'; // Determine status for logging/toast
+    console.log(`Processing claim for item ${itemId} via admin route with action ${action}.`);
     
     try {
-      const response = await fetch(`http://localhost:5000/api/items/${itemId}/review`, {
+      // Use the dedicated admin route that includes logging
+      const response = await fetch(`http://localhost:5000/api/admin/claims/${itemId}/${action}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          // No Content-Type needed if body is empty, but action is in URL
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ status: newStatus })
+        // Body might not be needed if status is derived from URL action, check backend route
+        // body: JSON.stringify({ status: status }) // Potentially remove if backend uses URL param
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to ${newStatus} claim`);
+        let errorMsg = `Failed to ${action} claim`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {
+          // Ignore if response is not JSON
+        }
+        throw new Error(errorMsg);
       }
       
+      // Assuming success response means item was updated and log created
       toast({
-        title: newStatus === 'resolved' ? "Claim Approved" : "Claim Rejected",
-        description: `The claim associated with the item has been ${newStatus} successfully.`,
+        title: action === 'approve' ? "Claim Approved" : "Claim Rejected",
+        description: `The claim has been ${status} and logged successfully.`,
       });
       
+      // Refresh claims list and stats
       setClaims(prevClaims => prevClaims.filter(claim => claim.itemId !== itemId));
-      
       setStatsData(prev => ({
         ...prev,
         claimsPending: prev.claimsPending - 1,
-        resolvedItems: newStatus === 'resolved' ? prev.resolvedItems + 1 : prev.resolvedItems
+        // Adjust resolved count based on the actual status update
+        resolvedItems: status === 'resolved' ? prev.resolvedItems + 1 : prev.resolvedItems,
+        // claimsResolved might also need update depending on backend stats logic
       }));
       
     } catch (err) {
-      console.error(`Error ${newStatus}ing claim:`, err);
+      console.error(`Error ${action}ing claim:`, err);
       toast({
         title: "Error",
-        description: `Failed to ${newStatus} the claim. Please try again.`,
+        description: err instanceof Error ? err.message : `Failed to ${action} the claim. Please try again.`,
         variant: "destructive",
       });
     } finally {
@@ -463,6 +494,100 @@ const Admin = () => {
     // Or fetch the file blob and trigger download via JavaScript
   };
 
+  // Create test logs if none exist
+  const createTestLogs = async () => {
+    if (!isAuthenticated || !isAdmin || !token) return;
+    
+    try {
+      toast({
+        title: "Creating test logs",
+        description: "Generating sample claim logs for demonstration",
+      });
+      
+      // Simulate creating a few test logs on the server
+      const testItems = [
+        { id: '1', title: 'MacBook Pro' },
+        { id: '2', title: 'AirPods Max' },
+        { id: '3', title: 'iPhone 15 Pro' }
+      ];
+      
+      const testClaimants = [
+        { id: '1', name: 'Ali Ahmed' },
+        { id: '2', name: 'Sarah Khan' },
+        { id: '3', name: 'Usman Malik' }
+      ];
+      
+      const testActions = ['approved', 'rejected'];
+      
+      // Create mock logs directly in state for demonstration
+      const mockLogs: ClaimLogEntry[] = [];
+      
+      for (let i = 0; i < 5; i++) {
+        const item = testItems[Math.floor(Math.random() * testItems.length)];
+        const claimant = testClaimants[Math.floor(Math.random() * testClaimants.length)];
+        const action = testActions[Math.floor(Math.random() * testActions.length)] as 'approved' | 'rejected';
+        
+        mockLogs.push({
+          _id: `mock-${i}`,
+          itemId: item.id,
+          itemTitle: item.title,
+          claimantName: claimant.name,
+          adminName: 'Admin User',
+          action: action,
+          timestamp: new Date(Date.now() - Math.floor(Math.random() * 10000000)).toISOString()
+        });
+      }
+      
+      setClaimHistory(mockLogs);
+      
+      toast({
+        title: "Test logs created",
+        description: "Sample logs have been generated for demonstration",
+      });
+    } catch (error) {
+      console.error('Error creating test logs:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create test logs",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle viewing a report
+  const handleViewReport = async (report: GeneratedReport) => {
+    setViewingReport(report);
+    setLoadingReportActivity(true);
+    setReportActivityLogs([]);
+    toast({
+      title: "Loading Report Data",
+      description: `Fetching activity for ${report.filename}...`
+    });
+
+    try {
+      const response = await fetch('http://localhost:5000/api/admin/claim-logs', { 
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent activity for report');
+      }
+      
+      const logs: ClaimLogEntry[] = await response.json();
+      setReportActivityLogs(logs.slice(0, 5)); 
+      
+    } catch (error) {
+      console.error('Error fetching activity for report view:', error);
+      toast({
+        title: "Error",
+        description: "Could not load recent activity for the report.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingReportActivity(false);
+    }
+  };
+
   if (!isAuthenticated || !isAdmin) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -548,13 +673,14 @@ const Admin = () => {
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-          <TabsList className="grid w-full grid-cols-4 md:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 md:grid-cols-7">
             <TabsTrigger value="pending-claims"><ListChecks className="mr-2 h-4 w-4"/>Claims</TabsTrigger>
             <TabsTrigger value="item-management"><Package className="mr-2 h-4 w-4"/>Items</TabsTrigger>
             <TabsTrigger value="high-value"><ShieldAlert className="mr-2 h-4 w-4"/>High Value</TabsTrigger>
             <TabsTrigger value="user-management"><Users className="mr-2 h-4 w-4"/>Users</TabsTrigger>
             <TabsTrigger value="analytics"><BarChart3 className="mr-2 h-4 w-4"/>Analytics</TabsTrigger>
             <TabsTrigger value="reports"><FileText className="mr-2 h-4 w-4"/>Reports</TabsTrigger>
+            <TabsTrigger value="logs"><History className="mr-2 h-4 w-4"/>Logs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pending-claims" className="mt-6">
@@ -597,7 +723,7 @@ const Admin = () => {
                                   size="sm" 
                                   className="bg-green-500 hover:bg-green-600 text-white"
                                   disabled={processingClaimId === claim.itemId}
-                                  onClick={() => handleProcessClaim(claim.itemId, 'resolved')}
+                                  onClick={() => handleProcessClaim(claim.itemId, 'approve')}
                                 >
                                   {processingClaimId === claim.itemId ? (
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -610,7 +736,7 @@ const Admin = () => {
                                   size="sm" 
                                   variant="destructive"
                                   disabled={processingClaimId === claim.itemId}
-                                  onClick={() => handleProcessClaim(claim.itemId, 'rejected')}
+                                  onClick={() => handleProcessClaim(claim.itemId, 'reject')}
                                 >
                                   {processingClaimId === claim.itemId ? (
                                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -690,7 +816,7 @@ const Admin = () => {
                               variant="default" 
                               className="bg-green-500 hover:bg-green-600 text-white"
                               disabled={processingClaimId === claim.itemId}
-                              onClick={() => handleProcessClaim(claim.itemId, 'resolved')}
+                              onClick={() => handleProcessClaim(claim.itemId, 'approve')}
                             >
                               {processingClaimId === claim.itemId ? (
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -704,7 +830,7 @@ const Admin = () => {
                               size="sm" 
                               variant="destructive"
                               disabled={processingClaimId === claim.itemId}
-                              onClick={() => handleProcessClaim(claim.itemId, 'rejected')}
+                              onClick={() => handleProcessClaim(claim.itemId, 'reject')}
                             >
                               {processingClaimId === claim.itemId ? (
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -722,48 +848,6 @@ const Admin = () => {
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">No pending claims to review</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="mt-8">
-              <CardHeader>
-                <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Claim & Resolution History</CardTitle>
-                <CardDescription>Log of item claims processed by admins.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingClaimHistory ? (
-                  <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
-                ) : claimHistory.length > 0 ? (
-                  <ScrollArea className="h-[300px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Item</TableHead>
-                          <TableHead>Claimant</TableHead>
-                          <TableHead>Admin</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead>Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {claimHistory.map(log => (
-                          <TableRow key={log._id}>
-                            <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => handleViewItem(log.itemId)}>{log.itemTitle}</TableCell>
-                            <TableCell>{log.claimantName}</TableCell>
-                            <TableCell>{log.adminName}</TableCell>
-                            <TableCell>
-                              <Badge variant={log.action === 'approved' ? 'default' : 'destructive'} className={log.action === 'approved' ? 'bg-green-500' : ''}>
-                                {log.action === 'approved' ? 'Approved/Returned' : 'Rejected'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">No claim history available.</p>
                 )}
               </CardContent>
             </Card>
@@ -1082,7 +1166,7 @@ const Admin = () => {
                              <TableHead>Filename</TableHead>
                              <TableHead>Type</TableHead>
                              <TableHead>Generated At</TableHead>
-                             <TableHead className="text-right">Action</TableHead>
+                             <TableHead className="text-right">Actions</TableHead>
                            </TableRow>
                          </TableHeader>
                          <TableBody>
@@ -1092,10 +1176,16 @@ const Admin = () => {
                                <TableCell><Badge variant="outline" className="capitalize">{report.type}</Badge></TableCell>
                                <TableCell>{new Date(report.generatedAt).toLocaleString()}</TableCell>
                                <TableCell className="text-right">
-                                 <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
-                                   <FileText className="mr-2 h-4 w-4"/>
-                                   Download
-                                 </Button>
+                                 <div className="flex justify-end space-x-2">
+                                    <Button variant="outline" size="sm" onClick={() => handleViewReport(report)}>
+                                      <Eye className="mr-2 h-4 w-4"/>
+                                      View
+                                    </Button>
+                                   <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
+                                     <Download className="mr-2 h-4 w-4"/>
+                                     Download
+                                   </Button>
+                                 </div>
                                </TableCell>
                              </TableRow>
                            ))}
@@ -1110,6 +1200,179 @@ const Admin = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Add a report viewer modal/dialog */}
+                {viewingReport && (
+                  <AlertDialog open={!!viewingReport} onOpenChange={() => setViewingReport(null)}>
+                    <AlertDialogContent className="max-w-3xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {viewingReport.filename}
+                          <Badge variant="outline" className="ml-2 capitalize">{viewingReport.type}</Badge>
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Generated on {new Date(viewingReport.generatedAt).toLocaleString()}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      
+                      <div className="my-4 p-4 border rounded bg-muted/30 max-h-[60vh] overflow-auto">
+                        {/* Use real stats (current snapshot) - Needs backend change for historical data */}
+                        <h3 className="text-lg font-semibold mb-4">{viewingReport.type === 'daily' ? 'Daily' : 'Weekly'} System Status Report</h3>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="font-medium">Items Summary (Current Snapshot)</h4>
+                            {/* Display current statsData - needs backend change for report-specific stats */}
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                              {/* ... keep existing stats display using statsData ... */}
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Total Items:</span>
+                                <span className="float-right font-medium">{statsData.totalItems}</span>
+                              </div>
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Lost Items:</span>
+                                <span className="float-right font-medium">{statsData.lostItems}</span>
+                              </div>
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Found Items:</span>
+                                <span className="float-right font-medium">{statsData.foundItems}</span>
+                              </div>
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Resolved Items:</span>
+                                <span className="float-right font-medium">{statsData.resolvedItems}</span>
+                              </div>                              
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium">Claims Activity (Current Snapshot)</h4>
+                             {/* Display current statsData - needs backend change for report-specific stats */}
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                              {/* ... keep existing stats display using statsData ... */}
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Pending Claims:</span>
+                                <span className="float-right font-medium">{statsData.claimsPending}</span>
+                              </div>
+                              <div className="bg-background p-2 rounded">
+                                <span className="text-muted-foreground text-sm">Processed Claims:</span>
+                                <span className="float-right font-medium">{statsData.claimsResolved}</span>
+                              </div>                              
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium">Recent Activity (Latest Logs)</h4>
+                            {loadingReportActivity ? (
+                              <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+                            ) : (
+                              <Table className="mt-2">
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Item</TableHead>
+                                    <TableHead>Action</TableHead>
+                                    <TableHead>Admin</TableHead>
+                                    <TableHead>Date</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {reportActivityLogs.length > 0 ? (
+                                    reportActivityLogs.map(log => (
+                                      <TableRow key={log._id}>
+                                        <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => handleViewItem(log.itemId)}>
+                                          {log.itemTitle}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Badge variant={log.action === 'approved' ? 'default' : 'destructive'} className={log.action === 'approved' ? 'bg-green-500 text-white' : ''}>
+                                            {log.action === 'approved' ? 'Approved' : 'Rejected'}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>{log.adminName}</TableCell>
+                                        <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                                      </TableRow>
+                                    ))
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={4} className="text-center h-24">No recent activity logs found.</TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Close</AlertDialogCancel>
+                        <Button onClick={() => handleDownloadReport(viewingReport)}>
+                          <Download className="mr-2 h-4 w-4"/>
+                          Download
+                        </Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="logs" className="mt-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center"><History className="mr-2 h-5 w-5"/>Item Claim Log</CardTitle>
+                  <CardDescription>Record of when and by whom items were claimed or rejected.</CardDescription>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={createTestLogs}
+                  className="ml-auto"
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Generate Demo Logs
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {loadingClaimHistory ? (
+                  <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+                ) : claimHistory.length > 0 ? (
+                  <ScrollArea className="h-[60vh]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead>Claimant</TableHead>
+                          <TableHead>Admin</TableHead>
+                          <TableHead>Action</TableHead>
+                          <TableHead>Date & Time</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {claimHistory.map(log => (
+                          <TableRow key={log._id}>
+                            <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => handleViewItem(log.itemId)}>{log.itemTitle}</TableCell>
+                            <TableCell>{log.claimantName}</TableCell>
+                            <TableCell>{log.adminName}</TableCell>
+                            <TableCell>
+                              <Badge variant={log.action === 'approved' ? 'default' : 'destructive'} className={log.action === 'approved' ? 'bg-green-500 text-white' : ''}>
+                                {log.action === 'approved' ? 'Approved/Returned' : 'Rejected'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-12 border border-dashed border-border rounded-lg">
+                    <History className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-lg font-medium">No claim logs available</p>
+                    <p className="text-muted-foreground mb-4">There are no records of claimed items yet.</p>
+                    <Button onClick={createTestLogs}>Generate Sample Logs</Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

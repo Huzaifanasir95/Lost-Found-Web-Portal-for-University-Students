@@ -14,6 +14,15 @@ import {
 import { Search, Filter, SlidersHorizontal, PackageX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Loader2 } from "lucide-react";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+// import ReportViewModal from '@/components/admin/ReportViewModal';
 
 interface Item {
   _id: string;
@@ -37,6 +46,8 @@ const LostItems = () => {
   const [dateRange, setDateRange] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const { toast } = useToast();
+  const { token, isAdmin, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   
   useEffect(() => {
     const fetchItems = async () => {

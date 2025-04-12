@@ -301,7 +301,8 @@ exports.reviewItemClaim = async (req, res) => {
       return res.status(400).json({ message: 'Invalid status' });
     }
     
-    const item = await Item.findById(req.params.id);
+    const item = await Item.findById(req.params.id)
+      .populate('claimedBy', 'name email'); // Populate claimant details
     
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
@@ -312,7 +313,16 @@ exports.reviewItemClaim = async (req, res) => {
       return res.status(400).json({ message: 'Item is not claimed' });
     }
     
-    const originalClaimerId = item.claimedBy; // Store original claimer for notification
+    const originalClaimerId = item.claimedBy ? item.claimedBy._id : null; // Store original claimer for notification
+    
+    // Store claim information for logging
+    const claimInfo = {
+      user: originalClaimerId,
+      claimantName: item.claimedBy ? item.claimedBy.name : 'Anonymous',
+      itemId: item._id,
+      itemTitle: item.title,
+      action: status === 'resolved' ? 'approved' : 'rejected'
+    };
     
     // Update item status and potentially clear claim details
     if (status === 'resolved') {
@@ -359,13 +369,19 @@ exports.reviewItemClaim = async (req, res) => {
       await claimerNotification.save();
     }
     
-    res.json(item);
+    // Return both item and claim info for logging purposes
+    return {
+      item: item,
+      claim: claimInfo,
+      success: true
+    };
   } catch (error) {
     console.error('Error reviewing item claim:', error);
     if (error.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Item not found' });
     }
     res.status(500).json({ message: 'Server error' });
+    return null;
   }
 };
 
