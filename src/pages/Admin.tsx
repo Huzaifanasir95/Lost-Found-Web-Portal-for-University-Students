@@ -24,7 +24,8 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  Loader2
+  Loader2,
+  RefreshCcw
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -129,6 +130,7 @@ const Admin = () => {
   const [loadingItems, setLoadingItems] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [updatingStatusItemId, setUpdatingStatusItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -277,6 +279,47 @@ const Admin = () => {
       });
     } finally {
       setDeletingItemId(null);
+    }
+  };
+
+  const handleUpdateItemStatus = async (itemId: string, newStatus: ItemStatus) => {
+    setUpdatingStatusItemId(itemId);
+    try {
+      const response = await fetch(`http://localhost:5000/api/items/${itemId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json' 
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!response.ok) {
+        let errorMsg = 'Failed to update item status';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) { /* Ignore parsing error */ }
+        throw new Error(errorMsg);
+      }
+
+      const updatedItem: Item = await response.json();
+
+      toast({ title: "Status Updated", description: `Item status set to ${newStatus}.` });
+      setAllItems(prevItems => 
+        prevItems.map(item => item._id === itemId ? updatedItem : item)
+      );
+
+    } catch (err) {
+      console.error("Error updating item status:", err);
+      toast({ 
+        title: "Error Updating Status", 
+        description: err instanceof Error ? err.message : 'An unknown error occurred', 
+        variant: "destructive" 
+      });
+    } finally {
+      setUpdatingStatusItemId(null);
     }
   };
 
@@ -641,36 +684,49 @@ const Admin = () => {
                               </TableCell>
                               <TableCell>{item.user?.name || 'System?'}</TableCell>
                               <TableCell className="text-right">
-                                 <AlertDialog>
-                                   <AlertDialogTrigger asChild>
+                                <div className="flex items-center justify-end gap-2">
+                                  {item.status !== 'pending' && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      disabled={updatingStatusItemId === item._id || deletingItemId === item._id}
+                                      onClick={() => handleUpdateItemStatus(item._id, 'pending')}
+                                    >
+                                      {updatingStatusItemId === item._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-1 h-4 w-4"/>}
+                                      Re-open
+                                    </Button>
+                                  )}
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
                                       <Button 
                                         variant="destructive" 
                                         size="sm" 
-                                        disabled={deletingItemId === item._id}
+                                        disabled={deletingItemId === item._id || updatingStatusItemId === item._id}
                                       >
-                                         {deletingItemId === item._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4"/>}
-                                         Delete
+                                        {deletingItemId === item._id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <XCircle className="mr-1 h-4 w-4"/>}
+                                        Delete
                                       </Button>
-                                   </AlertDialogTrigger>
-                                   <AlertDialogContent>
-                                     <AlertDialogHeader>
-                                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                       <AlertDialogDescription>
-                                         This action cannot be undone. This will permanently delete the item 
-                                         <span className="font-semibold">"{item.title}"</span> and all associated data.
-                                       </AlertDialogDescription>
-                                     </AlertDialogHeader>
-                                     <AlertDialogFooter>
-                                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                       <AlertDialogAction 
-                                         onClick={() => handleDeleteItem(item._id)} 
-                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          This action cannot be undone. This will permanently delete the item 
+                                          <span className="font-semibold">"{item.title}"</span> and all associated data.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction 
+                                          onClick={() => handleDeleteItem(item._id)} 
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                         >
                                           Yes, delete item
                                         </AlertDialogAction>
-                                     </AlertDialogFooter>
-                                   </AlertDialogContent>
-                                 </AlertDialog>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))
