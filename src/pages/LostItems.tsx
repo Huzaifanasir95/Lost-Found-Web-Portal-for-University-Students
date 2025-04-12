@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -34,6 +33,9 @@ const LostItems = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [category, setCategory] = useState("all");
+  const [location, setLocation] = useState("all");
+  const [dateRange, setDateRange] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
   const { toast } = useToast();
   
   useEffect(() => {
@@ -67,11 +69,64 @@ const LostItems = () => {
   }, [toast]);
   
   // Filter logic
-  const filteredItems = items.filter(item => 
-    item.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (category === "all" || item.category === category)
-  );
-  
+  const filteredItems = items.filter(item => {
+    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = category === "all" || item.category === category;
+    const matchesLocation = location === "all" || item.location === location;
+    
+    // Date range filtering
+    const itemDate = new Date(item.createdAt);
+    const now = new Date();
+    let matchesDate = true;
+    
+    const weekAgo = new Date(now.getTime());
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    const monthAgo = new Date(now.getTime());
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    
+    switch (dateRange) {
+      case "today":
+        matchesDate = itemDate.toDateString() === now.toDateString();
+        break;
+      case "week":
+        matchesDate = itemDate >= weekAgo;
+        break;
+      case "month":
+        matchesDate = itemDate >= monthAgo;
+        break;
+      default: // "all"
+        matchesDate = true;
+    }
+    
+    return matchesSearch && matchesCategory && matchesLocation && matchesDate;
+  });
+
+  // Sort the filtered items
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case "oldest":
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case "alphabetical":
+        return a.title.localeCompare(b.title);
+      default:
+        return 0;
+    }
+  });
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setCategory("all");
+    setLocation("all");
+    setDateRange("all");
+  };
+
+  // Get unique locations from items
+  const locations = ["all", ...Array.from(new Set(items.map(item => item.location)))];
+
   const categories = ["all", ...Array.from(new Set(items.map(item => item.category)))];
 
   // Format the date
@@ -144,23 +199,23 @@ const LostItems = () => {
                 
                 <div>
                   <label className="text-sm font-medium mb-1 block">Location</label>
-                  <Select defaultValue="all">
+                  <Select value={location} onValueChange={setLocation}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select location" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Locations</SelectItem>
-                      <SelectItem value="library">Library</SelectItem>
-                      <SelectItem value="cafeteria">Cafeteria</SelectItem>
-                      <SelectItem value="gym">Gymnasium</SelectItem>
-                      <SelectItem value="academic">Academic Buildings</SelectItem>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc} value={loc}>
+                          {loc === "all" ? "All Locations" : loc}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div>
                   <label className="text-sm font-medium mb-1 block">Date Range</label>
-                  <Select defaultValue="all">
+                  <Select value={dateRange} onValueChange={setDateRange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select date range" />
                     </SelectTrigger>
@@ -175,7 +230,7 @@ const LostItems = () => {
               </div>
               
               <div className="flex justify-between">
-                <Button variant="outline" size="sm">Reset</Button>
+                <Button variant="outline" size="sm" onClick={handleResetFilters}>Reset</Button>
                 <Button size="sm">Apply Filters</Button>
               </div>
             </div>
@@ -190,7 +245,7 @@ const LostItems = () => {
             </p>
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-              <Select defaultValue="newest">
+              <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -234,7 +289,7 @@ const LostItems = () => {
             </div>
           ) : filteredItems.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredItems.map((item) => (
+              {sortedItems.map((item) => (
                 <ItemCard 
                   key={item._id}
                   id={item._id}
