@@ -56,6 +56,11 @@ router.delete('/:id', auth, itemsController.deleteItem);
 // @access  Private
 router.post('/:id/claim', auth, itemsController.claimItem);
 
+// @route   DELETE /api/items/:id/claim
+// @desc    Cancel a claim made by the current user on an item
+// @access  Private
+router.delete('/:id/claim', auth, itemsController.cancelClaim);
+
 // @route   POST /api/items/:id/review
 // @desc    Admin approve/reject item claim
 // @access  Private (Admin only)

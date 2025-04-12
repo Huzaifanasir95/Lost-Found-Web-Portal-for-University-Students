@@ -47,7 +47,7 @@ const itemSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'claimed', 'resolved', 'rejected'],
+    enum: ['pending', 'claimed', 'resolved', 'rejected', 'available'],
     default: 'pending'
   },
   imageUrl: {

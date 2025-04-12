@@ -8,7 +8,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Eye, Search, AlertCircle, Filter, Calendar, MapPin, Loader2 } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Eye, Search, AlertCircle, Filter, Calendar, MapPin, Loader2, Trash2, XCircle, Edit } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog"
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,6 +63,24 @@ interface ErrorResponse {
 
 // Claim interface removed as we fetch claimed ITEMS directly
 
+// State for confirmation dialog
+interface WithdrawConfirmInfo {
+  itemId: string;
+  itemTitle: string;
+  itemType: 'lost' | 'found';
+}
+
+interface CancelClaimConfirmInfo {
+  itemId: string;
+  itemTitle: string;
+}
+
+// State for Edit Item Description Dialog
+interface EditItemInfo {
+  itemId: string;
+  currentDescription: string;
+}
+
 const MyItems = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('lost');
@@ -53,6 +94,22 @@ const MyItems = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // State for Withdraw confirmation dialog
+  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
+  const [itemToWithdraw, setItemToWithdraw] = useState<WithdrawConfirmInfo | null>(null);
+  const [isWithdrawing, setIsWithdrawing] = useState(false); // Loading state for withdrawal
+
+  // State for Cancel Claim confirmation dialog
+  const [isCancelClaimDialogOpen, setIsCancelClaimDialogOpen] = useState(false);
+  const [itemToCancelClaim, setItemToCancelClaim] = useState<CancelClaimConfirmInfo | null>(null);
+  const [isCancellingClaim, setIsCancellingClaim] = useState(false); // Loading state
+
+  // State for Edit Item Description Dialog
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<EditItemInfo | null>(null);
+  const [editedDescription, setEditedDescription] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // If not authenticated, redirect to login
   useEffect(() => {
@@ -132,35 +189,173 @@ const MyItems = () => {
     navigate(`/items/${itemId}`);
   };
 
-  const handleWithdrawItem = async (itemId: string, itemType: 'lost' | 'found') => {
-     // TODO: Implement backend API call to withdraw/delete item
-     // Example: await api.delete(`/api/items/${itemId}`);
-     // Then refetch or update local state
-    console.log("Withdraw item:", itemId, itemType); 
-    toast({
-      title: "Action Not Implemented",
-      description: `Withdrawing ${itemType} items is not yet fully implemented.`,
-      variant: "default"
-    });
-     // Example state update after successful API call:
-    // if (itemType === 'lost') {
-    //   setLostItems(prev => prev.filter(item => item._id !== itemId));
-    // } else {
-    //   setFoundItems(prev => prev.filter(item => item._id !== itemId));
-    // }
+  // Opens the withdraw confirmation dialog
+  const handleWithdrawItem = (item: Item) => {
+    setItemToWithdraw({ itemId: item._id, itemTitle: item.title, itemType: item.type });
+    setIsWithdrawDialogOpen(true);
   };
 
-  const handleCancelClaim = async (itemId: string) => {
-    // TODO: Implement backend API call to cancel claim on an item
-    // This might involve a new endpoint like POST /api/items/:id/claims/cancel
-    console.log("Cancel claim for item:", itemId);
-    toast({
-      title: "Action Not Implemented",
-      description: "Cancelling claims is not yet fully implemented.",
-      variant: "default"
-    });
-    // Example state update after successful API call:
-    // setClaimedItems(prev => prev.filter(item => item._id !== itemId));
+  // Executes the withdrawal after confirmation
+  const confirmWithdrawItem = async () => {
+    if (!itemToWithdraw || !token) return;
+    
+    setIsWithdrawing(true);
+    const { itemId, itemType, itemTitle } = itemToWithdraw;
+
+    try {
+      await axios.delete(`/api/items/${itemId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      toast({
+        title: "Report Withdrawn",
+        description: `Your report for "${itemTitle}" has been successfully withdrawn.`,
+      });
+
+      // Update local state
+      if (itemType === 'lost') {
+        setLostItems(prev => prev.filter(item => item._id !== itemId));
+      } else {
+        setFoundItems(prev => prev.filter(item => item._id !== itemId));
+      }
+      setItemToWithdraw(null); // Clear the item
+      setIsWithdrawDialogOpen(false); // Close dialog
+
+    } catch (err) {
+      console.error("Error withdrawing item:", err);
+      let errorMsg = 'Failed to withdraw the report. Please try again.';
+      if (axios.isAxiosError(err)) {
+        const serverError = err as AxiosError<ErrorResponse>;
+        if (serverError?.response?.data?.message) {
+          errorMsg = serverError.response.data.message;
+        }
+      }
+      toast({
+        title: "Withdrawal Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  // Opens the cancel claim confirmation dialog
+  const handleCancelClaim = (item: Item) => {
+    setItemToCancelClaim({ itemId: item._id, itemTitle: item.title });
+    setIsCancelClaimDialogOpen(true);
+  };
+
+  // Executes the claim cancellation after confirmation
+  const confirmCancelClaim = async () => {
+    if (!itemToCancelClaim || !token) return;
+
+    setIsCancellingClaim(true);
+    const { itemId, itemTitle } = itemToCancelClaim;
+
+    try {
+      // Note the different endpoint and method (DELETE)
+      await axios.delete(`/api/items/${itemId}/claim`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      toast({
+        title: "Claim Cancelled",
+        description: `Your claim for "${itemTitle}" has been successfully cancelled.`,
+      });
+
+      // Update local state - remove from claimedItems list
+      setClaimedItems(prev => prev.filter(item => item._id !== itemId));
+      
+      setItemToCancelClaim(null);
+      setIsCancelClaimDialogOpen(false);
+
+    } catch (err) {
+       console.error("Error cancelling claim:", err);
+      let errorMsg = 'Failed to cancel the claim. Please try again.';
+      if (axios.isAxiosError(err)) {
+        const serverError = err as AxiosError<ErrorResponse>;
+        if (serverError?.response?.data?.message) {
+          errorMsg = serverError.response.data.message;
+        }
+      }
+      toast({
+        title: "Cancellation Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancellingClaim(false);
+    }
+  };
+
+  // Opens the edit item description dialog
+  const handleEditItem = (item: Item) => {
+    setItemToEdit({ itemId: item._id, currentDescription: item.description });
+    setEditedDescription(item.description); // Pre-fill textarea
+    setIsEditDialogOpen(true);
+  };
+
+  // Saves the edited description
+  const handleSaveChanges = async () => {
+    if (!itemToEdit || !token || editedDescription === itemToEdit.currentDescription) {
+      setIsEditDialogOpen(false); // Close if no changes
+      return;
+    }
+
+    setIsSavingEdit(true);
+    const { itemId } = itemToEdit;
+
+    try {
+      const response = await axios.put<Item>(
+        `/api/items/${itemId}`,
+        { description: editedDescription }, // Only send the updated description
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const updatedItem = response.data;
+
+      // Update local state for both lost and found items lists
+      setLostItems(prev => 
+        prev.map(item => item._id === itemId ? { ...item, description: updatedItem.description } : item)
+      );
+      setFoundItems(prev => 
+        prev.map(item => item._id === itemId ? { ...item, description: updatedItem.description } : item)
+      );
+
+      toast({
+        title: "Description Updated",
+        description: "Your item description has been saved.",
+      });
+
+      setIsEditDialogOpen(false);
+      setItemToEdit(null);
+
+    } catch (err) {
+      console.error("Error updating item description:", err);
+      let errorMsg = 'Failed to save changes. Please try again.';
+      if (axios.isAxiosError(err)) {
+        const serverError = err as AxiosError<ErrorResponse>;
+        if (serverError?.response?.data?.message) {
+          errorMsg = serverError.response.data.message;
+        }
+      }
+      toast({
+        title: "Update Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   // Filtering logic using fetched data
@@ -234,13 +429,25 @@ const MyItems = () => {
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4">
                 <Button variant="outline" size="sm" onClick={() => handleViewItem(item._id)}>
                   <Eye className="h-4 w-4 mr-1" /> View Details
                 </Button>
-                 {/* Allow withdraw only if item is available/pending/claimed (not resolved) */}
-                {(item.status === 'available' || item.status === 'pending' || item.status === 'claimed') && (
-                    <Button variant="destructive" size="sm" onClick={() => handleWithdrawItem(item._id, item.type)}>
+
+                {/* Add Edit Button */} 
+                <Button variant="secondary" size="sm" onClick={() => handleEditItem(item)}>
+                   <Edit className="h-4 w-4 mr-1" /> Edit
+                 </Button>
+
+                {/* Show Withdraw button only if item is not resolved */}
+                {(item.status !== 'resolved') && (
+                    <Button 
+                       variant="destructive" 
+                       size="sm" 
+                       onClick={() => handleWithdrawItem(item)} // Pass the full item object
+                       disabled={isWithdrawing} // Disable while processing
+                     >
+                      <Trash2 className="h-4 w-4 mr-1" /> {/* Added Icon */}
                       Withdraw Report
                     </Button>
                 )}
@@ -268,7 +475,7 @@ const MyItems = () => {
         <div className="space-y-4">
           {items.map((item) => (
             <div
-              key={item._id} // Use item ID as key since we're displaying claimed items
+              key={item._id} 
               className="p-4 border border-border rounded-lg bg-card/50 hover:bg-card/80 transition-colors"
             >
               <div className="flex flex-col sm:flex-row justify-between mb-2">
@@ -298,13 +505,19 @@ const MyItems = () => {
                   </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4">
                 <Button variant="outline" size="sm" onClick={() => handleViewItem(item._id)}>
                    <Eye className="h-4 w-4 mr-1" /> View Item
                 </Button>
                  {/* Allow cancelling claim only if the item is still in 'claimed' state */}
                  {item.status === 'claimed' && (
-                   <Button variant="destructive" size="sm" onClick={() => handleCancelClaim(item._id)}>
+                   <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={() => handleCancelClaim(item)} // Pass full item
+                      disabled={isCancellingClaim}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" /> {/* Added Icon */}
                       Cancel Claim
                     </Button>
                  )}
@@ -400,6 +613,90 @@ const MyItems = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Withdraw Confirmation Dialog */}
+      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your report for 
+              <span className="font-semibold"> "{itemToWithdraw?.itemTitle}"</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isWithdrawing}>Cancel</AlertDialogCancel>
+            <Button 
+              variant="destructive" 
+              onClick={confirmWithdrawItem} 
+              disabled={isWithdrawing}
+            >
+              {isWithdrawing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              Yes, Withdraw Report
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Claim Confirmation Dialog */}
+       <AlertDialog open={isCancelClaimDialogOpen} onOpenChange={setIsCancelClaimDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to cancel this claim?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove your claim on the item 
+              <span className="font-semibold"> "{itemToCancelClaim?.itemTitle}"</span>. 
+              The item will become available again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancellingClaim}>Keep Claim</AlertDialogCancel>
+             <Button 
+              variant="destructive" 
+              onClick={confirmCancelClaim} 
+              disabled={isCancellingClaim}
+            >
+              {isCancellingClaim && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              Yes, Cancel Claim
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Item Description Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Item Description</DialogTitle>
+            <DialogDescription>
+              Update the description for your reported item. Make any changes below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                value={editedDescription}
+                onChange={(e) => setEditedDescription(e.target.value)}
+                className="col-span-3 h-24" // Adjust height as needed
+                placeholder="Provide more details about the item..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+               <Button type="button" variant="secondary" disabled={isSavingEdit}>Cancel</Button>
+            </DialogClose>
+            <Button type="button" onClick={handleSaveChanges} disabled={isSavingEdit || editedDescription === itemToEdit?.currentDescription}>
+               {isSavingEdit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+               Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

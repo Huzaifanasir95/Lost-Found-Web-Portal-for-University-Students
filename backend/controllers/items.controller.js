@@ -436,3 +436,74 @@ exports.addCommentToItem = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Cancel a claim made by the current user
+exports.cancelClaim = async (req, res) => {
+  const itemId = req.params.id;
+  const userId = req.user.id;
+  console.log(`Attempting to cancel claim for item ${itemId} by user ${userId}`);
+
+  try {
+    console.log('Finding item...');
+    const item = await Item.findById(itemId);
+
+    if (!item) {
+      console.log('Item not found');
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    console.log('Item found:', item.status, item.claimedBy);
+
+    // Check if the item is actually claimed
+    if (item.status !== 'claimed') {
+       console.log('Item not in claimed state');
+      return res.status(400).json({ message: 'Item is not currently claimed' });
+    }
+
+    // Check if the current user is the one who claimed it
+    if (!item.claimedBy || item.claimedBy.toString() !== userId) {
+       console.log(`Authorization failed: Item claimed by ${item.claimedBy}, user is ${userId}`);
+      return res.status(403).json({ message: 'Not authorized to cancel this claim' });
+    }
+    console.log('User authorized.');
+
+    // Reset claim status
+    console.log('Resetting item status to available and clearing claimedBy');
+    item.status = 'available'; // Make it available again for others to claim
+    const previousClaimerId = item.claimedBy;
+    item.claimedBy = null;
+    // item.claim = undefined; // Assuming claim details are not directly on item or handled elsewhere
+
+    console.log('Saving item...');
+    await item.save();
+    console.log('Item saved successfully.');
+
+    // Optional: Notify item owner that the claim was cancelled
+    if (item.user && item.user.toString() !== previousClaimerId.toString()) { // Don't notify if owner cancelled their own claim (edge case?)
+        console.log(`Attempting to notify owner ${item.user}`);
+        try {
+             await Notification.create({
+                user: item.user,
+                message: `The claim on your ${item.type} item '${item.title}' has been cancelled by the claimant.`,
+                relatedItem: item._id
+            });
+             console.log(`Notification sent to owner ${item.user}`);
+        } catch (notifError) {
+             console.error("Error creating cancellation notification:", notifError);
+             // Don't fail the whole request if notification fails
+        }
+    } else {
+        console.log('No owner notification needed or owner is the claimant.');
+    }
+
+    console.log('Claim cancelled successfully.');
+    res.json({ message: 'Claim cancelled successfully', item });
+
+  } catch (error) {
+    console.error('Error during cancelClaim process:', error);
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    // Adding more specific error logging
+    res.status(500).json({ message: 'Server error canceling claim', error: error.message });
+  }
+};
