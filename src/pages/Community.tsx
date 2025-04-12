@@ -7,9 +7,20 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageSquare, ThumbsUp, Calendar, Filter, PlusCircle, MapPin, Clock } from 'lucide-react';
+import { Search, MessageSquare, ThumbsUp, Calendar, Filter, PlusCircle, MapPin, Clock, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // Define the structure for a single post based on backend model
 interface Post {
@@ -40,12 +51,16 @@ interface Post {
 
 const Community = () => {
   const { toast } = useToast();
-  const { token } = useAuth(); // Get auth token
+  const { token, user } = useAuth(); // Get auth token and user info
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState(''); // State for search
   const [activeTab, setActiveTab] = useState('recent'); // State for tabs
+  const [isNewPostDialogOpen, setIsNewPostDialogOpen] = useState(false); // State for dialog
+  const [newPostTitle, setNewPostTitle] = useState(''); // State for new post title
+  const [newPostContent, setNewPostContent] = useState(''); // State for new post content
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false); // State for submission loading
 
   // Fetch posts when component mounts or token changes
   useEffect(() => {
@@ -84,11 +99,51 @@ const Community = () => {
     }
   };
 
-  const handleNewPost = () => {
-    toast({
-      title: "Coming Soon",
-      description: "This feature will be available soon!",
-    });
+  // Function to handle creating a new post
+  const handleCreatePost = async () => {
+    if (!newPostTitle.trim() || !newPostContent.trim()) {
+      toast({ title: "Missing Information", description: "Please enter both title and content.", variant: "destructive" });
+      return;
+    }
+    if (!token) {
+        toast({ title: "Authentication Error", description: "You must be logged in to post.", variant: "destructive" });
+        return;
+    }
+
+    setIsSubmittingPost(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/community', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, 
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ title: newPostTitle, content: newPostContent }),
+      });
+
+      if (!response.ok) {
+         const errorData = await response.json();
+         throw new Error(errorData.message || `Failed to create post: ${response.statusText}`);
+      }
+
+      // const newPost: Post = await response.json(); // Get the created post from response
+      toast({ title: "Post Created", description: "Your post has been added successfully." });
+      setIsNewPostDialogOpen(false); // Close dialog
+      setNewPostTitle(''); // Reset form
+      setNewPostContent('');
+      fetchPosts(); // Re-fetch posts to show the new one
+
+    } catch (err) {
+      console.error("Error creating post:", err);
+      toast({
+        title: "Error Creating Post",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingPost(false);
+    }
   };
 
   // Filter posts based on search term (simple example)
@@ -111,10 +166,56 @@ const Community = () => {
               </p>
             </div>
             
-            <Button onClick={handleNewPost}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Post
-            </Button>
+            <Dialog open={isNewPostDialogOpen} onOpenChange={setIsNewPostDialogOpen}>
+              <DialogTrigger asChild>
+                <Button disabled={!user}> {/* Disable if not logged in */} 
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  New Post
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Post</DialogTitle>
+                  <DialogDescription>
+                    Share something with the community. Fill in the details below.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="title" className="text-right">
+                      Title
+                    </Label>
+                    <Input 
+                      id="title" 
+                      value={newPostTitle} 
+                      onChange={(e) => setNewPostTitle(e.target.value)} 
+                      className="col-span-3" 
+                      placeholder="What did you lose or find?"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-start gap-4"> {/* Changed items-center to items-start */}
+                    <Label htmlFor="content" className="text-right pt-2"> {/* Added padding-top */}
+                      Content
+                    </Label>
+                    <Textarea 
+                      id="content" 
+                      value={newPostContent} 
+                      onChange={(e) => setNewPostContent(e.target.value)} 
+                      className="col-span-3" 
+                      placeholder="Provide details like location, time, description..."
+                      rows={5} // Give it some default height
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsNewPostDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleCreatePost} disabled={isSubmittingPost}>
+                    {isSubmittingPost && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                    Create Post
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
