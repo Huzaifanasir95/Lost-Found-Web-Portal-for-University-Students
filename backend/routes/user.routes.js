@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const { check } = require('express-validator');
@@ -73,5 +72,34 @@ router.put(
 // @desc    Delete user (admin only)
 // @access  Private (Admin only)
 router.delete('/:id', [auth, admin], userController.deleteUser);
+
+// @route   PUT /api/users/me/profile
+// @desc    Update current user profile (e.g., name)
+// @access  Private
+router.put(
+  '/me/profile',
+  [
+    auth,
+    [
+      check('name', 'Name is required').not().isEmpty()
+    ]
+  ],
+  userController.updateProfile
+);
+
+// @route   PUT /api/users/me/password
+// @desc    Change current user password
+// @access  Private
+router.put(
+  '/me/password',
+  [
+    auth,
+    [
+      check('currentPassword', 'Current password is required').not().isEmpty(),
+      check('newPassword', 'New password must be at least 6 characters').isLength({ min: 6 })
+    ]
+  ],
+  userController.changePassword
+);
 
 module.exports = router;

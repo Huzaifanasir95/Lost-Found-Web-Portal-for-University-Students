@@ -19,25 +19,49 @@ interface AuthContextType {
   logout: () => void;
   isAdmin: boolean;
   updateUserInfo: (updatedUser: User) => void;
+  updateUserContext: (updatedUserData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('token'));
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   
   // Check if user is already logged in
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
     const storedToken = localStorage.getItem('token');
-    
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
     if (storedToken) {
-      setToken(storedToken);
+      // Fetch user data based on token on initial load
+      const fetchUser = async () => {
+        try {
+          // Assume an endpoint like /api/users/me exists
+          const response = await fetch('http://localhost:5000/api/users/me', { 
+            headers: { 'Authorization': `Bearer ${storedToken}` }
+          });
+          if (response.ok) {
+            const userData = await response.json();
+            setUser(userData);
+            setIsAuthenticated(true);
+            setIsAdmin(userData.role === 'admin');
+            setToken(storedToken);
+          } else {
+            logout(); // Token is invalid or expired
+          }
+        } catch (error) {
+          console.error("Failed to fetch user on load:", error);
+          logout();
+        }
+      };
+      fetchUser();
+    } else {
+      setIsAuthenticated(false);
+      setUser(null);
+      setIsAdmin(false);
+      setToken(null);
     }
     setIsLoading(false);
   }, []);
@@ -73,6 +97,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       setToken(data.token);
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', data.token);
+      
+      setIsAuthenticated(true);
+      setIsAdmin(userData.role === 'admin');
       
       return Promise.resolve();
     } catch (error) {
@@ -119,6 +146,9 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', data.token);
       
+      setIsAuthenticated(true);
+      setIsAdmin(userData.role === 'admin');
+      
       return Promise.resolve();
     } catch (error) {
       return Promise.reject(error);
@@ -132,6 +162,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    setIsAuthenticated(false);
+    setIsAdmin(false);
   };
 
   const updateUserInfo = (updatedUser: User) => {
@@ -139,18 +171,31 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     localStorage.setItem('user', JSON.stringify(updatedUser));
   };
 
+  // Function to update user data in the context
+  const updateUserContext = (updatedUserData: Partial<User>) => {
+    setUser(currentUser => {
+      if (!currentUser) return null;
+      return { ...currentUser, ...updatedUserData };
+    });
+    // Optionally update isAdmin if role could change, though likely not from profile update
+    if (updatedUserData.role) {
+      setIsAdmin(updatedUserData.role === 'admin');
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
-        isAuthenticated: !!user && !!token,
+        isAuthenticated,
         isLoading,
         login,
         signup,
         logout,
-        isAdmin: user?.role === 'admin',
+        isAdmin,
         updateUserInfo,
+        updateUserContext,
       }}
     >
       {children}
