@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -10,16 +9,93 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Search, MessageSquare, ThumbsUp, Calendar, Filter, PlusCircle, MapPin, Clock } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+
+// Define the structure for a single post based on backend model
+interface Post {
+  _id: string;
+  title: string;
+  content: string;
+  user: { // Assuming user field is populated by backend
+    _id: string;
+    name: string;
+    // Add other user fields if populated/needed (e.g., avatar)
+  };
+  likes: string[]; // Array of user IDs
+  comments: {
+    _id: string;
+    text: string;
+    user: { // Assuming populated
+      _id: string;
+      name: string;
+    };
+    createdAt: string;
+  }[];
+  resolved: boolean;
+  createdAt: string;
+  // Add category and location if they are part of the backend model/API response
+  category?: string; // Optional for now
+  location?: string; // Optional for now
+}
 
 const Community = () => {
   const { toast } = useToast();
-  
+  const { token } = useAuth(); // Get auth token
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState(''); // State for search
+  const [activeTab, setActiveTab] = useState('recent'); // State for tabs
+
+  // Fetch posts when component mounts or token changes
+  useEffect(() => {
+    fetchPosts();
+  }, [token]);
+
+  const fetchPosts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:5000/api/community', {
+        headers: {
+          // Include Authorization header if needed for fetching posts
+          // 'Authorization': `Bearer ${token}`, 
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch posts: ${response.statusText}`);
+      }
+
+      const data: Post[] = await response.json();
+      setPosts(data);
+
+    } catch (err) {
+      console.error("Error fetching posts:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      toast({
+        title: "Error",
+        description: "Could not load community posts.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleNewPost = () => {
     toast({
       title: "Coming Soon",
       description: "This feature will be available soon!",
     });
   };
+
+  // Filter posts based on search term (simple example)
+  const filteredPosts = posts.filter(post => 
+    post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    post.content.toLowerCase().includes(searchTerm.toLowerCase())
+  );
   
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -49,6 +125,8 @@ const Community = () => {
                     <Input 
                       placeholder="Search community posts..." 
                       className="flex-1"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
                     />
                     <Button variant="ghost" size="icon">
                       <Search className="h-5 w-5" />
@@ -60,7 +138,7 @@ const Community = () => {
                 </CardContent>
               </Card>
               
-              <Tabs defaultValue="recent">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <div className="flex justify-between items-center mb-4">
                   <TabsList>
                     <TabsTrigger value="recent">Recent</TabsTrigger>
@@ -70,9 +148,17 @@ const Community = () => {
                 </div>
                 
                 <TabsContent value="recent" className="space-y-4 mt-2">
-                  {communityPosts.map((post) => (
-                    <CommunityPost key={post.id} post={post} />
-                  ))}
+                  {loading ? (
+                     <div className="text-center py-10">Loading posts...</div>
+                  ) : error ? (
+                     <div className="text-center py-10 text-red-500">Error: {error}</div>
+                  ) : filteredPosts.length > 0 ? (
+                    filteredPosts.map((post) => (
+                      <CommunityPost key={post._id} post={post} />
+                    ))
+                  ) : (
+                    <div className="text-center py-10 text-muted-foreground">No posts found.</div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="popular" className="space-y-4 mt-2">
@@ -156,40 +242,24 @@ const Community = () => {
   );
 };
 
+// Update CommunityPostProps to use the new Post interface
 interface CommunityPostProps {
-  post: {
-    id: number;
-    title: string;
-    content: string;
-    author: {
-      name: string;
-      avatar: string;
-    };
-    category: string;
-    location: string;
-    timestamp: string;
-    comments: number;
-    likes: number;
-    isResolved: boolean;
-  };
+  post: Post;
 }
 
 const CommunityPost = ({ post }: CommunityPostProps) => {
   const { toast } = useToast();
-  
-  const handleLike = () => {
-    toast({
-      title: "Coming Soon",
-      description: "This feature will be available soon!",
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    // Example formatting, adjust as needed
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
     });
   };
   
-  const handleComment = () => {
-    toast({
-      title: "Coming Soon",
-      description: "This feature will be available soon!",
-    });
-  };
+  const handleLike = () => { /* ... coming soon ... */ };
+  const handleComment = () => { /* ... coming soon ... */ };
   
   return (
     <Card className="hover:border-primary/20 transition-all duration-300">
@@ -197,42 +267,46 @@ const CommunityPost = ({ post }: CommunityPostProps) => {
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-2">
             <Avatar>
-              <AvatarFallback>{post.author.name.charAt(0)}</AvatarFallback>
-              <AvatarImage src={post.author.avatar} />
+               {/* Assuming user.name exists. Add fallback/image logic if needed */}
+              <AvatarFallback>{post.user?.name?.charAt(0) || 'U'}</AvatarFallback>
+              {/* <AvatarImage src={post.user.avatar} /> */}
             </Avatar>
             <div>
-              <div className="font-medium">{post.author.name}</div>
+              <div className="font-medium">{post.user?.name || 'Anonymous'}</div>
               <div className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3" /> {post.timestamp}
+                <Clock className="h-3 w-3" /> {formatDate(post.createdAt)}
               </div>
             </div>
           </div>
           
-          <Badge variant={post.isResolved ? "default" : "outline"}>
-            {post.isResolved ? "Resolved" : "Open"}
+          <Badge variant={post.resolved ? "default" : "outline"}>
+            {post.resolved ? "Resolved" : "Open"}
           </Badge>
         </div>
         
         <h3 className="text-lg font-semibold mb-2">{post.title}</h3>
-        <p className="text-muted-foreground mb-4">{post.content}</p>
+        <p className="text-muted-foreground mb-4 whitespace-pre-wrap">{post.content}</p> {/* Added whitespace-pre-wrap */}
         
         <div className="flex flex-wrap gap-2 mb-4">
-          <Badge variant="secondary">{post.category}</Badge>
-          <div className="flex items-center text-xs text-muted-foreground gap-1">
-            <MapPin className="h-3 w-3" />
-            {post.location}
-          </div>
+          {/* Render category/location if available */}
+          {post.category && <Badge variant="secondary">{post.category}</Badge>}
+          {post.location && (
+            <div className="flex items-center text-xs text-muted-foreground gap-1">
+              <MapPin className="h-3 w-3" />
+              {post.location}
+            </div>
+          )}
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t border-border/50">
           <Button variant="ghost" size="sm" onClick={handleLike}>
             <ThumbsUp className="mr-1 h-4 w-4" />
-            {post.likes}
+            {post.likes?.length || 0}
           </Button>
           
           <Button variant="ghost" size="sm" onClick={handleComment}>
             <MessageSquare className="mr-1 h-4 w-4" />
-            {post.comments}
+            {post.comments?.length || 0}
           </Button>
           
           <Button variant="outline" size="sm">View Details</Button>
@@ -241,69 +315,5 @@ const CommunityPost = ({ post }: CommunityPostProps) => {
     </Card>
   );
 };
-
-// Mock community posts
-const communityPosts = [
-  {
-    id: 1,
-    title: "Lost my Casio FX-991ES calculator in CS-5 Lab",
-    content: "I was in the CS-5 Lab in A-Block yesterday between 1-3 PM for my Programming Fundamentals lab. I think I left my Casio scientific calculator there. It has my name (Usman) written on the back. If anyone found it, please let me know!",
-    author: {
-      name: "Usman Ali",
-      avatar: ""
-    },
-    category: "Electronics",
-    location: "A-Block, CS-5 Lab",
-    timestamp: "Yesterday at 6:45 PM",
-    comments: 3,
-    likes: 5,
-    isResolved: false
-  },
-  {
-    id: 2,
-    title: "Found a black backpack in the cafeteria",
-    content: "I found a black Adidas backpack in the cafeteria near the drink counter around 1:30 PM today. It has some books and a pencil case inside. I've handed it to the cafeteria staff. The owner can collect it from there.",
-    author: {
-      name: "Sara Khan",
-      avatar: ""
-    },
-    category: "Bags",
-    location: "Cafeteria",
-    timestamp: "Today at 2:15 PM",
-    comments: 1,
-    likes: 8,
-    isResolved: true
-  },
-  {
-    id: 3,
-    title: "Lost my student ID card near library",
-    content: "I lost my FAST-NUCES student ID card (FA-21-BCS-123) somewhere near the library entrance. I need it urgently for tomorrow's exam. Please contact me if you find it!",
-    author: {
-      name: "Ahmed Raza",
-      avatar: ""
-    },
-    category: "Documents",
-    location: "Library",
-    timestamp: "Today at 11:20 AM",
-    comments: 5,
-    likes: 12,
-    isResolved: false
-  },
-  {
-    id: 4,
-    title: "Left my notes in the B-Block",
-    content: "I left my Database Systems notes (green spiral notebook) in Room B-4 after the lecture today. If anyone found it, please let me know. I need it for the upcoming quiz!",
-    author: {
-      name: "Zainab Fatima",
-      avatar: ""
-    },
-    category: "Books/Notes",
-    location: "B-Block, Room B-4",
-    timestamp: "Yesterday at 3:30 PM",
-    comments: 0,
-    likes: 2,
-    isResolved: false
-  }
-];
 
 export default Community;
