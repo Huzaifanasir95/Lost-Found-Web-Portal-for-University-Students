@@ -824,7 +824,7 @@ const Admin = () => {
           <Card>
             <CardContent className="p-6 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">High Value Items</p>
+                <p className="text-sm font-medium text-muted-foreground">Feedbacks</p>
                 <h3 className="text-3xl font-bold">{statsData.highValueItems}</h3>
               </div>
               <AlertTriangle className="h-10 w-10 text-amber-500" />
@@ -846,7 +846,7 @@ const Admin = () => {
           <TabsList className="grid w-full grid-cols-4 md:grid-cols-7">
             <TabsTrigger value="pending-claims"><ListChecks className="mr-2 h-4 w-4"/>Claims</TabsTrigger>
             <TabsTrigger value="item-management"><Package className="mr-2 h-4 w-4"/>Items</TabsTrigger>
-            <TabsTrigger value="high-value"><ShieldAlert className="mr-2 h-4 w-4"/>High Value</TabsTrigger>
+            <TabsTrigger value="high-value"><ShieldAlert className="mr-2 h-4 w-4"/>Feedback</TabsTrigger>
             <TabsTrigger value="user-management"><Users className="mr-2 h-4 w-4"/>Users</TabsTrigger>
             <TabsTrigger value="analytics"><BarChart3 className="mr-2 h-4 w-4"/>Analytics</TabsTrigger>
             <TabsTrigger value="reports"><FileText className="mr-2 h-4 w-4"/>Reports</TabsTrigger>
