@@ -232,7 +232,7 @@ const MyItems = () => {
           errorMsg = serverError.response.data.message;
         }
       }
-      toast({
+    toast({
         title: "Withdrawal Failed",
         description: errorMsg,
         variant: "destructive",
@@ -263,8 +263,8 @@ const MyItems = () => {
         },
       });
 
-      toast({
-        title: "Claim Cancelled",
+    toast({
+      title: "Claim Cancelled",
         description: `Your claim for "${itemTitle}" has been successfully cancelled.`,
       });
 
@@ -532,7 +532,7 @@ const MyItems = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navigation />
-
+      
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold gradient-text">My Items</h1>
@@ -540,7 +540,7 @@ const MyItems = () => {
             Manage your lost and found items and claims
           </p>
         </div>
-
+        
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-grow">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -552,21 +552,21 @@ const MyItems = () => {
               disabled={isLoading} // Disable search while loading
             />
           </div>
-
+          
           {/* Filter button - functionality not implemented in this step */}
           {/* <Button variant="outline" className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
             Filter
           </Button> */}
         </div>
-
+        
         <Tabs defaultValue="lost" className="mb-8" onValueChange={setActiveTab} value={activeTab}>
           <TabsList className="grid grid-cols-3 mb-6">
             <TabsTrigger value="lost" disabled={isLoading}>Lost Items</TabsTrigger>
             <TabsTrigger value="found" disabled={isLoading}>Found Items</TabsTrigger>
             <TabsTrigger value="claims" disabled={isLoading}>My Claims</TabsTrigger>
           </TabsList>
-
+          
           {/* Lost Items Tab */}
           <TabsContent value="lost">
             <Card>
@@ -581,7 +581,7 @@ const MyItems = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
+          
           {/* Found Items Tab */}
           <TabsContent value="found">
             <Card>
@@ -596,7 +596,7 @@ const MyItems = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
+          
           {/* My Claims Tab */}
           <TabsContent value="claims">
             <Card>
@@ -697,7 +697,7 @@ const MyItems = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
+      
       <Footer />
     </div>
   );

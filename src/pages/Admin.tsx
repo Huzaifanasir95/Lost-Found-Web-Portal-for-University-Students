@@ -262,7 +262,7 @@ const Admin = () => {
         setItemError(null);
         try {
           const response = await fetch('http://localhost:5000/api/items', {
-            headers: { 
+          headers: {
               'Authorization': `Bearer ${token}`,
               'Accept': 'application/json' 
             }
@@ -306,16 +306,16 @@ const Admin = () => {
               // For demo purposes, you might want to auto-generate some test logs
               console.log('No logs found from API, using mock data');
             }
-          }
-        } catch (error) {
+        }
+      } catch (error) {
           console.error('Error fetching claim logs:', error);
-          toast({
-            title: "Error",
+        toast({
+          title: "Error",
             description: "Failed to load claim history. Please try again later.",
-            variant: "destructive",
-          });
+          variant: "destructive",
+        });
           // Don't clear existing data if there was an error
-        } finally {
+      } finally {
           setLoadingClaimHistory(false);
         }
       }
@@ -465,12 +465,12 @@ const Admin = () => {
 
       // Refresh claims list and stats
       setClaims(prevClaims => prevClaims.filter(claim => claim.itemId !== itemId));
-      setStatsData(prev => ({ 
-          ...prev,
-          claimsPending: prev.claimsPending - 1,
+      setStatsData(prev => ({
+        ...prev,
+        claimsPending: prev.claimsPending - 1,
           resolvedItems: prev.resolvedItems + 1 
       }));
-
+      
     } catch (err) {
       console.error(`Error ${action}ing claim:`, err);
       toast({ title: "Error", description: err instanceof Error ? err.message : `Failed to ${action} the claim.`, variant: "destructive" });
@@ -852,7 +852,7 @@ const Admin = () => {
             <TabsTrigger value="reports"><FileText className="mr-2 h-4 w-4"/>Reports</TabsTrigger>
             <TabsTrigger value="logs"><History className="mr-2 h-4 w-4"/>Logs</TabsTrigger>
           </TabsList>
-
+          
           <TabsContent value="pending-claims" className="mt-6">
             <Card>
               <CardHeader>
@@ -1155,7 +1155,7 @@ const Admin = () => {
                                       </AlertDialogFooter>
                                     </AlertDialogContent>
                                   </AlertDialog>
-                                </div>
+                          </div>
                               </TableCell>
                             </TableRow>
                           ))
@@ -1218,8 +1218,8 @@ const Admin = () => {
                      </CardHeader>
                     <CardContent><div className="text-2xl font-bold">{statsData.highValueItems}</div></CardContent>
                   </Card>
-                </div>
-
+                        </div>
+                        
                 {/* --- Charts Section --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                   {/* Item Type Distribution Chart */}
@@ -1273,13 +1273,13 @@ const Admin = () => {
                       </ResponsiveContainer>
                     </CardContent>
                   </Card>
-                </div>
+                          </div>
                  
                 {/* Placeholder for more complex charts requiring backend data */}
                 <div className="mt-6 p-6 border rounded-lg text-center bg-muted/40">
                   <BarChart3 className="h-8 w-8 mx-auto text-muted-foreground mb-2"/>
                   <p className="text-sm text-muted-foreground">More charts (e.g., items over time, category breakdown) require additional backend data.</p>
-                </div>
+                        </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1291,7 +1291,7 @@ const Admin = () => {
                 <CardDescription>Configure and view automated system status reports.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
+                        <div>
                   <Label htmlFor="report-frequency" className="text-sm font-medium">Report Frequency</Label>
                   <Select 
                      value={reportFrequency} 
@@ -1307,7 +1307,7 @@ const Admin = () => {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">Select how often you want to receive status reports.</p>
-                </div>
+                          </div>
                 
                 <Button onClick={() => toast({ title: "Configuration Saved", description: `Report frequency set to ${reportFrequency}.` })}>
                   Save Configuration
@@ -1355,7 +1355,7 @@ const Admin = () => {
                                      )}
                                      Download
                                    </Button>
-                                 </div>
+                        </div>
                                </TableCell>
                              </TableRow>
                            ))}
@@ -1369,7 +1369,7 @@ const Admin = () => {
                       <p className="text-xs text-muted-foreground">(Reports will appear here once generated by the backend)</p>
                     </div>
                   )}
-                </div>
+                      </div>
 
                 {/* View Report Modal */} 
                 {viewingReport && (
@@ -1388,8 +1388,8 @@ const Admin = () => {
                        <div className="my-4 p-4 border rounded bg-muted/30 max-h-[60vh] overflow-auto">
                          {/* Use real stats (current snapshot) - Needs backend change for historical data */}
                          <h3 className="text-lg font-semibold mb-4">{viewingReport.type === 'daily' ? 'Daily' : 'Weekly'} System Status Report</h3>
-                         
-                         <div className="space-y-4">
+                      
+                      <div className="space-y-4">
                            <div>
                              <h4 className="font-medium">Items Summary (Current Snapshot)</h4>
                              {/* Display current statsData - needs backend change for report-specific stats */}
@@ -1412,8 +1412,8 @@ const Admin = () => {
                                  <span className="float-right font-medium">{statsData.resolvedItems}</span>
                                </div>                              
                              </div>
-                           </div>
-                           
+                        </div>
+                        
                            <div>
                              <h4 className="font-medium">Claims Activity (Current Snapshot)</h4>
                               {/* Display current statsData - needs backend change for report-specific stats */}
@@ -1422,15 +1422,15 @@ const Admin = () => {
                                <div className="bg-background p-2 rounded">
                                  <span className="text-muted-foreground text-sm">Pending Claims:</span>
                                  <span className="float-right font-medium">{statsData.claimsPending}</span>
-                               </div>
+                        </div>
                                <div className="bg-background p-2 rounded">
                                  <span className="text-muted-foreground text-sm">Processed Claims:</span>
                                  <span className="float-right font-medium">{statsData.claimsResolved}</span>
-                               </div>                              
-                             </div>
-                           </div>
-                           
-                           <div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
                              <h4 className="font-medium">Recent Activity (Latest Logs)</h4>
                              {loadingReportActivity ? (
                                <div className="text-center py-4"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
@@ -1468,8 +1468,8 @@ const Admin = () => {
                                  </TableBody>
                                </Table>
                              )}
-                           </div>
-                         </div>
+                  </div>
+                </div>
                        </div>
                        
                        <AlertDialogFooter>
@@ -1485,7 +1485,7 @@ const Admin = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
+          
           <TabsContent value="logs" className="mt-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">

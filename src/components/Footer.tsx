@@ -7,7 +7,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  Heart
+  Heart,
+  Linkedin
 } from "lucide-react";
 
 const Footer = () => {
@@ -29,13 +30,13 @@ const Footer = () => {
               innovative digital platform.
             </p>
             <div className="flex gap-4 mt-6">
-              <a href="https://www.facebook.com/FASTNU.ISB/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://www.facebook.com/share/168AbWbfaD/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Facebook size={20} />
               </a>
-              <a href="https://twitter.com/fastnu_isb" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-                <Twitter size={20} />
+              <a href="https://www.linkedin.com/company/fastnuislamabadofficial/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                <Linkedin size={20} />
               </a>
-              <a href="https://www.instagram.com/fastnu_isb/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://www.instagram.com/fast.isb.official?igsh=MWFzdHA0MHlmcGo1aA==" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Instagram size={20} />
               </a>
             </div>
@@ -70,7 +71,7 @@ const Footer = () => {
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-muted-foreground">
-                  FAST-NUCES, Block B, Faisal Town, Islamabad, Pakistan
+                FAST University, 3 A.K. Brohi Road, H-11/4 H-11, Islamabad Pakistan 
                 </span>
               </li>
               <li className="flex items-center gap-3">
@@ -79,7 +80,7 @@ const Footer = () => {
                   href="mailto:helpdesk.isb@nu.edu.pk"
                   className="text-muted-foreground hover:text-primary transition-colors"
                 >
-                  helpdesk.isb@nu.edu.pk
+                  onestop.isb@nu.edu.pk
                 </a>
               </li>
               <li className="flex items-center gap-3">

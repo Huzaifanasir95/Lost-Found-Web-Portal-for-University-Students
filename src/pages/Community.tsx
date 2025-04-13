@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageSquare, ThumbsUp, Calendar, Filter, PlusCircle, MapPin, Clock, Loader2 } from 'lucide-react';
+import { Search, MessageSquare, ThumbsUp, Calendar, Filter, PlusCircle, MapPin, Clock, Loader2, Star, MessageCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -64,6 +64,12 @@ const Community = () => {
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+  
+  // Feedback dialog state
+  const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState<number>(0);
+  const [feedbackDescription, setFeedbackDescription] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   // Fetch posts based on active tab and search term
   useEffect(() => {
@@ -196,6 +202,24 @@ const Community = () => {
       return []; // Default empty
   };
   
+  // Handle feedback submission
+  const handleSubmitFeedback = () => {
+    // Just showing a successful toast for now without backend logic
+    setIsSubmittingFeedback(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+    toast({
+        title: "Feedback Submitted",
+        description: "Thank you for your feedback!",
+    });
+      setIsFeedbackDialogOpen(false);
+      setFeedbackRating(0);
+      setFeedbackDescription('');
+      setIsSubmittingFeedback(false);
+    }, 1000);
+  };
+  
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navigation />
@@ -210,56 +234,113 @@ const Community = () => {
               </p>
             </div>
             
-            <Dialog open={isNewPostDialogOpen} onOpenChange={setIsNewPostDialogOpen}>
-              <DialogTrigger asChild>
-                <Button disabled={!user}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  New Post
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Post</DialogTitle>
-                  <DialogDescription>
-                    Share something with the community. Fill in the details below.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="title" className="text-right">
-                      Title
-                    </Label>
-                    <Input 
-                      id="title" 
-                      value={newPostTitle} 
-                      onChange={(e) => setNewPostTitle(e.target.value)} 
-                      className="col-span-3" 
-                      placeholder="Post title..."
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-start gap-4">
-                    <Label htmlFor="content" className="text-right pt-2">
-                      Content
-                    </Label>
-                    <Textarea 
-                      id="content" 
-                      value={newPostContent} 
-                      onChange={(e) => setNewPostContent(e.target.value)} 
-                      className="col-span-3" 
-                      placeholder="Share details..."
-                      rows={5}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsNewPostDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={handleCreatePost} disabled={isSubmittingPost || !newPostTitle.trim() || !newPostContent.trim()}>
-                    {isSubmittingPost && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
-                    Create Post
+            {/* Buttons container */}
+            <div className="flex space-x-3">
+              {/* Feedback Button */}
+              <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Feedback
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  {/* Dialog content */}
+                  <DialogHeader>
+                    <DialogTitle>Give Feedback</DialogTitle>
+                    <DialogDescription>
+                      We appreciate your feedback! Please rate your experience and share any thoughts.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="flex justify-center items-center gap-2 py-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Button
+                          key={star}
+                          variant="ghost"
+                          size="sm"
+                          className={`p-0 h-auto hover:bg-transparent ${feedbackRating >= star ? 'text-yellow-400' : 'text-muted'}`}
+                          onClick={() => setFeedbackRating(star)}
+                        >
+                          <Star className="h-8 w-8 fill-current" />
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="feedback">Your Feedback</Label>
+                      <Textarea 
+                        id="feedback" 
+                        value={feedbackDescription} 
+                        onChange={(e) => setFeedbackDescription(e.target.value)} 
+                        placeholder="Tell us about your experience..."
+                        rows={4}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button 
+                      onClick={handleSubmitFeedback} 
+                      disabled={feedbackRating === 0 || isSubmittingFeedback}
+                    >
+                      {isSubmittingFeedback && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                      Submit Feedback
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
+              {/* New Post Button */}
+              <Dialog open={isNewPostDialogOpen} onOpenChange={setIsNewPostDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={!user}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New Post
+            </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Create New Post</DialogTitle>
+                    <DialogDescription>
+                      Share something with the community. Fill in the details below.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="title" className="text-right">
+                        Title
+                      </Label>
+                      <Input 
+                        id="title" 
+                        value={newPostTitle} 
+                        onChange={(e) => setNewPostTitle(e.target.value)} 
+                        className="col-span-3" 
+                        placeholder="Post title..."
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                      <Label htmlFor="content" className="text-right pt-2">
+                        Content
+                      </Label>
+                      <Textarea 
+                        id="content" 
+                        value={newPostContent} 
+                        onChange={(e) => setNewPostContent(e.target.value)} 
+                        className="col-span-3" 
+                        placeholder="Share details..."
+                        rows={5}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsNewPostDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreatePost} disabled={isSubmittingPost || !newPostTitle.trim() || !newPostContent.trim()}>
+                      {isSubmittingPost && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                      Create Post
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -304,7 +385,7 @@ const Community = () => {
                   ) : (
                     <div className="text-center py-10 text-muted-foreground">
                         {activeTab === 'my-posts' && !isAuthenticated ? 'Please log in to see your posts.' : 'No posts found.'}
-                    </div>
+                  </div>
                   )}
                 </TabsContent>
               </Tabs>
@@ -404,7 +485,7 @@ const CommunityPost = ({ post }: CommunityPostProps) => {
         year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
     });
   };
-
+  
   const handleToggleLike = async () => {
     if (!isAuthenticated || !token || !user) {
       toast({ title: "Login Required", description: "Please log in to like posts.", variant: "destructive" });
@@ -489,10 +570,10 @@ const CommunityPost = ({ post }: CommunityPostProps) => {
           {/* Render category/location if available */}
           {post.category && <Badge variant="secondary">{post.category}</Badge>}
           {post.location && (
-            <div className="flex items-center text-xs text-muted-foreground gap-1">
-              <MapPin className="h-3 w-3" />
-              {post.location}
-            </div>
+          <div className="flex items-center text-xs text-muted-foreground gap-1">
+            <MapPin className="h-3 w-3" />
+            {post.location}
+          </div>
           )}
         </div>
         

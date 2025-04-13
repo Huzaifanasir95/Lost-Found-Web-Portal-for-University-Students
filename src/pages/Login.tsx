@@ -126,8 +126,7 @@ const Login = () => {
               <div className="mt-1">
                 <span>For testing, use:</span>
                 <ul className="mt-1">
-                  <li>Student: student@nu.edu.pk / password123</li>
-                  <li>Admin: admin@nu.edu.pk / admin123</li>
+                  
                 </ul>
               </div>
             </div>

@@ -56,37 +56,37 @@ const LocationInfo = () => {
 const locations = [
   {
     name: "CS Academic Office",
-    description: "Located in A-Block, Ground Floor. Primary location for all CS department lost items.",
+    description: "Located in C-Block, 2nd Floor. Primary location for all CS department lost items.",
     hours: "Monday to Friday: 9:00 AM - 5:00 PM",
     contact: "051-111-128-128 (Ext. 102)"
   },
   {
     name: "Central Academic Office",
-    description: "Located in Admin Block, First Floor. Handles valuable items and official documents.",
+    description: "Located in A-Block, Ground Floor. Handles valuable items and official documents.",
     hours: "Monday to Friday: 9:00 AM - 4:00 PM",
     contact: "051-111-128-128 (Ext. 111)"
   },
   {
     name: "One Stop Office",
-    description: "Located at the university entrance. General lost & found items from common areas.",
+    description: "Located in A-Block, Ground Floor. General lost & found items from common areas.",
     hours: "Monday to Friday: 8:30 AM - 5:30 PM, Saturday: 9:00 AM - 1:00 PM",
     contact: "051-111-128-128 (Ext. 100)"
   },
   {
     name: "Library Help Desk",
-    description: "Located at the main library entrance. For items found within the library premises.",
+    description: "Located at the H.U BEG library entrance. For items found within the library premises.",
     hours: "Monday to Friday: 8:00 AM - 9:00 PM, Saturday: 9:00 AM - 5:00 PM",
     contact: "051-111-128-128 (Ext. 120)"
   },
   {
-    name: "Sports Complex Office",
-    description: "Located at the entrance of Sports Complex. For items lost during sports activities.",
+    name: "Sports Office",
+    description: "Located at the Gate 2. For items lost during sports activities.",
     hours: "Monday to Friday: 9:00 AM - 6:00 PM, Saturday: 10:00 AM - 4:00 PM",
     contact: "051-111-128-128 (Ext. 150)"
   },
   {
     name: "Campus Security Office",
-    description: "Located near the main gate. Handles emergency lost & found items after hours.",
+    description: "Located near the Gate 1. Handles emergency lost & found items after hours.",
     hours: "24/7 Service",
     contact: "051-111-128-128 (Ext. 555)"
   }
