@@ -67,8 +67,8 @@ const Stats = () => {
                 <div className="mt-3 flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-primary/20"></div>
                   <div>
-                    <p className="font-medium text-sm">Dr. M. Asif Khan</p>
-                    <p className="text-xs text-muted-foreground">Campus Manager, FAST-NUCES</p>
+                    <p className="font-medium text-sm">Dr.Aftab Maroof</p>
+                    <p className="text-xs text-muted-foreground">Rector, FAST-NUCES</p>
                   </div>
                 </div>
               </div>
@@ -81,8 +81,8 @@ const Stats = () => {
                 <div className="mt-3 flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-accent/20"></div>
                   <div>
-                    <p className="font-medium text-sm">Hasan Ahmed</p>
-                    <p className="text-xs text-muted-foreground">CS Student, Batch 2025</p>
+                    <p className="font-medium text-sm">Huzaifa Nasir</p>
+                    <p className="text-xs text-muted-foreground">CS Student, Batch 2022</p>
                   </div>
                 </div>
               </div>

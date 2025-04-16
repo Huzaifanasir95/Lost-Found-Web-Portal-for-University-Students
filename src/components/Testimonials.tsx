@@ -45,14 +45,14 @@ const Testimonials = () => {
 // Mock testimonials with FAST-NUCES student profiles
 const testimonials = [
   {
-    name: "Ahmed Khan",
-    program: "CS Student, Batch '24",
+    name: "Maaz Ali",
+    program: "CS Student, Batch '22",
     quote: "I lost my calculator before a critical exam in A-Block. Posted it on FindersNexus and someone found it in the CS lab within hours!",
     avatar: ""
   },
   {
-    name: "Fatima Ali",
-    program: "BS Electrical Engineering",
+    name: "Hamza Naveed ",
+    program: "CS Student, Batch '22",
     quote: "Found someone's ID card in the cafeteria and used the platform to return it. The verification system made sure it went to the right person.",
     avatar: ""
   },

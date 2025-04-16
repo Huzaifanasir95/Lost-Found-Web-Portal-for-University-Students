@@ -71,7 +71,7 @@ exports.createItem = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const { title, description, type, category, location, date, user, contactMethod } = req.body;
+    const { title, description, type, category, location, date, contactMethod, isAnonymous } = req.body;
     
     // Create a new item instance
     const newItem = new Item({
@@ -81,15 +81,19 @@ exports.createItem = async (req, res) => {
       category,
       location,
       date,
-      user: user || null,
+      user: req.user ? req.user.id : null,
       contactMethod: contactMethod || null,
       imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
-      status: 'pending'
+      status: 'pending',
+      isAnonymous: isAnonymous || false
     });
     
     console.log('Creating new item:', newItem);
     
     const item = await newItem.save();
+    
+    // Populate the user information before sending response
+    await item.populate('user', 'name email');
     console.log('Item saved successfully:', item);
     
     res.status(201).json(item);
@@ -185,15 +189,18 @@ exports.deleteItem = async (req, res) => {
 // Claim an item
 exports.claimItem = async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id);
+    const item = await Item.findById(req.params.id)
+      .populate('user', 'name email');
     
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
     
-    // Can't claim own item
-    if (req.user && item.user && item.user.toString() === req.user.id) {
-      return res.status(400).json({ message: 'Cannot claim your own item' });
+    // Check if the user is trying to claim their own reported item
+    if (item.user && item.user._id.toString() === req.user.id) {
+      return res.status(403).json({ 
+        message: 'You cannot claim an item that you reported' 
+      });
     }
     
     // Check if item is already claimed or resolved
@@ -221,7 +228,7 @@ exports.claimItem = async (req, res) => {
     // Create notification for item owner
     if (item.user) {
       const notification = new Notification({
-        user: item.user,
+        user: item.user._id,
         message: `Someone has claimed your ${item.type} item: ${item.title}`,
         relatedItem: item._id
       });
@@ -240,6 +247,9 @@ exports.claimItem = async (req, res) => {
       
       await adminNotification.save();
     }
+    
+    // Populate the user information before sending response
+    await item.populate('claimedBy', 'name email');
     
     res.json(item);
   } catch (error) {

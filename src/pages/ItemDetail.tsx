@@ -62,6 +62,7 @@ interface Item {
   };
   identifyingFeatures?: string;
   comments: Comment[];
+  isAnonymous: boolean;
 }
 
 const ItemDetail = () => {
@@ -257,8 +258,22 @@ const ItemDetail = () => {
 
   const canClaim = () => {
     if (!item) return false;
+    if (!isAuthenticated) return false;
     if (isOwner()) return false;
     return item.status === 'pending';
+  };
+
+  const getClaimButtonMessage = () => {
+    if (!isAuthenticated) {
+      return "Please log in to claim this item";
+    }
+    if (isOwner()) {
+      return `You reported this ${item?.type} item, so you cannot claim it`;
+    }
+    if (item?.status !== 'pending') {
+      return `This item is currently ${item?.status}`;
+    }
+    return item?.type === 'lost' ? "I've Found This Item" : "This Item Belongs to Me";
   };
 
   if (loading) {
@@ -391,7 +406,7 @@ const ItemDetail = () => {
                   <div>
                     <p className="font-medium text-sm">Reported By</p>
                     <p className="text-muted-foreground text-sm">
-                      {item.user?.name || "Anonymous"}
+                      {item.isAnonymous ? "Anonymous" : item.user?.name || "Unknown User"}
                     </p>
                   </div>
                 </div>
@@ -455,143 +470,115 @@ const ItemDetail = () => {
               )}
             </div>
             
-            {canClaim() && (
+            {isAuthenticated && (
               <div>
-                <Dialog open={isClaimDialogOpen} onOpenChange={setIsClaimDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full py-6" size="lg">
-                      {item.type === 'lost' ? (
-                        <>
-                          <CheckCircle className="mr-2 h-5 w-5" />
-                          I've Found This Item
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="mr-2 h-5 w-5" />
-                          This Item Belongs to Me
-                        </>
-                      )}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {item.type === 'lost' ? "Report Found Item" : "Claim This Item"}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {item.type === 'lost' 
-                          ? "Please provide details about how you found this item." 
-                          : "Please provide proof that this item belongs to you."}
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <form onSubmit={handleClaimSubmit}>
-                      <div className="space-y-4 py-4">
-                        {item.type === 'found' && (
+                {canClaim() ? (
+                  <Dialog open={isClaimDialogOpen} onOpenChange={setIsClaimDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full py-6" size="lg">
+                        <CheckCircle className="mr-2 h-5 w-5" />
+                        {item.type === 'lost' ? "I've Found This Item" : "This Item Belongs to Me"}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {item.type === 'lost' ? "Report Found Item" : "Claim This Item"}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {item.type === 'lost' 
+                            ? "Please provide details about how you found this item." 
+                            : "Please provide proof that this item belongs to you."}
+                        </DialogDescription>
+                      </DialogHeader>
+                      
+                      <form onSubmit={handleClaimSubmit}>
+                        <div className="space-y-4 py-4">
+                          {item.type === 'found' && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">
+                                Describe a unique feature of this item that only the owner would know
+                              </label>
+                              <Textarea 
+                                name="proofDetails"
+                                placeholder="E.g., serial number, distinctive marks, contents..." 
+                                className="min-h-[100px]"
+                                required
+                              />
+                            </div>
+                          )}
+                          
                           <div className="space-y-2">
                             <label className="text-sm font-medium">
-                              Describe a unique feature of this item that only the owner would know
+                              {item.type === 'lost' 
+                                ? "Where and when did you find it?" 
+                                : "When and where did you lose it?"}
                             </label>
                             <Textarea 
-                              name="proofDetails"
-                              placeholder="E.g., serial number, distinctive marks, contents..." 
+                              name="description"
+                              placeholder="Please be as specific as possible..." 
                               className="min-h-[100px]"
                               required
                             />
                           </div>
-                        )}
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">
-                            {item.type === 'lost' 
-                              ? "Where and when did you find it?" 
-                              : "When and where did you lose it?"}
-                          </label>
-                          <Textarea 
-                            name="description"
-                            placeholder="Please be as specific as possible..." 
-                            className="min-h-[100px]"
-                            required
-                          />
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Your Contact Information</label>
+                            <Input 
+                              name="contactInfo"
+                              placeholder="Email or phone number" 
+                              required
+                            />
+                          </div>
                         </div>
                         
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Your Contact Information</label>
-                          <Input 
-                            name="contactInfo"
-                            placeholder="Email or phone number" 
-                            required
-                          />
-                        </div>
-                      </div>
-                      
-                      <DialogFooter>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => setIsClaimDialogOpen(false)}
-                        >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          Cancel
-                        </Button>
-                        <Button type="submit" disabled={submitting}>
-                          {submitting ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Submitting...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Submit
-                            </>
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
-            
-            {!canClaim() && item.status !== 'pending' && (
-              <div className={`
-                p-4 rounded-lg border 
-                ${item.status === 'claimed' ? 'border-amber-200 bg-amber-50 dark:bg-amber-950/20' : ''}
-                ${item.status === 'resolved' ? 'border-green-200 bg-green-50 dark:bg-green-950/20' : ''}
-                ${item.status === 'rejected' ? 'border-red-200 bg-red-50 dark:bg-red-950/20' : ''}
-                text-center
-              `}>
-                {item.status === 'claimed' && (
-                  <p className="text-amber-700 dark:text-amber-400">
-                    This item has been claimed and is awaiting admin verification.
-                  </p>
-                )}
-                {item.status === 'resolved' && (
-                  <p className="text-green-700 dark:text-green-400">
-                    This item has been successfully returned to its {item.type === 'lost' ? 'owner' : 'finder'}.
-                  </p>
-                )}
-                {item.status === 'rejected' && (
-                  <p className="text-red-700 dark:text-red-400">
-                    The claim for this item was rejected. If you have further information, please contact the admin.
-                  </p>
+                        <DialogFooter>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => setIsClaimDialogOpen(false)}
+                          >
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={submitting}>
+                            {submitting ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Submitting...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Submit
+                              </>
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                ) : (
+                  <div className="p-4 rounded-lg border border-border bg-card">
+                    <div className="flex items-center gap-2 justify-center text-muted-foreground">
+                      {isOwner() ? (
+                        <>
+                          <User className="h-5 w-5" />
+                          <p>You reported this {item.type} item, so you cannot claim it.</p>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-5 w-5" />
+                          <p>This item is currently {item.status} and cannot be claimed.</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
             
-            {isAuthenticated && isOwner() && item.status === 'pending' && (
-              <div className="p-4 rounded-lg border border-border bg-card text-center">
-                <p className="text-muted-foreground">
-                  You reported this item, so you cannot claim it. 
-                  {item.type === 'lost' 
-                    ? " Someone will contact you if they find it." 
-                    : " Someone will contact you if they lost it."}
-                </p>
-              </div>
-            )}
-            
-            {!isAuthenticated && item.status === 'pending' && (
+            {!isAuthenticated && (
               <div className="p-4 rounded-lg border border-border bg-card text-center">
                 <p className="text-muted-foreground mb-3">
                   You need to be logged in to claim this item.
