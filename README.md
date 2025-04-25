@@ -18,12 +18,7 @@ A web application for managing lost and found items at FAST-NUCES.
    ```
 
 3. Create a `.env` file in the backend directory with the following content:
-   ```
-   PORT=5000
-   NODE_ENV=development
-   JWT_SECRET=fastcampuslostandfoundjwtsecretkey
-   MONGODB_URI=mongodb+srv://nasirhuzaifa95:1234@cluster0.uir19.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
-   ```
+
 
 4. Start the backend server:
    ```
